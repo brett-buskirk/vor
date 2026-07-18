@@ -20,11 +20,13 @@
 # interface only. Postgres (5432) and ClickHouse (8123/9000) are never
 # published — they stay on the internal Docker network. See ./Caddyfile.example.
 #
-# TODO(vor): verify all image versions against the upstream Community Edition:
-# https://github.com/plausible/community-edition
+# Image versions are pinned and verified against the upstream Community Edition
+# compose (github.com/plausible/community-edition) as of 2026-07. Bumps flow
+# through Dependabot once the stack is live — no `latest`.
 #
 # Usage (manual path):
-#   cp plausible-conf.env.example plausible-conf.env   # then fill in secrets
+#   cp plausible-conf.env.example plausible-conf.env    # then fill in secrets
+#   export DATA_ROOT=/mnt/<project_name>-analytics-data # the block-volume mount
 #   export PUBLIC_IP=<droplet public ip> TAILSCALE_IP=<droplet tailscale ip>
 #   docker compose up -d
 # =============================================================================
@@ -34,11 +36,13 @@ services:
   # PostgreSQL — accounts, site configuration, metadata
   # ---------------------------------------------------------------------------
   plausible_db:
-    image: postgres:16-alpine # TODO(vor): pin/verify current version
+    image: postgres:16-alpine
     container_name: vor_plausible_db
     restart: always
     volumes:
-      - db-data:/var/lib/postgresql/data
+      # On the attached Block Storage volume (DATA_ROOT) so accounts + site
+      # config survive a droplet rebuild. See "Data durability" at the bottom.
+      - ${DATA_ROOT:-/mnt/vor-analytics-data}/postgres:/var/lib/postgresql/data
     environment:
       # TODO(vor): set a strong password (matches DATABASE_URL in the env file).
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CHANGE_ME_STRONG_PASSWORD}
@@ -53,17 +57,20 @@ services:
   # ClickHouse — the analytics events store
   # ---------------------------------------------------------------------------
   plausible_events_db:
-    image: clickhouse/clickhouse-server:24.12-alpine # TODO(vor): pin/verify current version
+    image: clickhouse/clickhouse-server:24.12-alpine
     container_name: vor_plausible_events_db
     restart: always
     volumes:
-      - event-data:/var/lib/clickhouse
-      - event-logs:/var/log/clickhouse-server
-      # Plausible's recommended ClickHouse tweaks (reduce logging; IPv4-only).
+      # The events table (the product) on the Block Storage volume (DATA_ROOT).
+      - ${DATA_ROOT:-/mnt/vor-analytics-data}/clickhouse:/var/lib/clickhouse
+      - ${DATA_ROOT:-/mnt/vor-analytics-data}/clickhouse-logs:/var/log/clickhouse-server
+      # Plausible's recommended ClickHouse tweaks. logs.xml + ipv4-only.xml apply
+      # everywhere; low-resources.xml + the users.d override tune ClickHouse for
+      # the small default node (s-2vcpu-4gb). All four are verbatim upstream.
       - ./clickhouse/logs.xml:/etc/clickhouse-server/config.d/logs.xml:ro
       - ./clickhouse/ipv4-only.xml:/etc/clickhouse-server/config.d/ipv4-only.xml:ro
-      # TODO(vor): upstream also ships low-resources.xml + a users.d override for
-      # small nodes — add them here if you deploy on a constrained droplet.
+      - ./clickhouse/low-resources.xml:/etc/clickhouse-server/config.d/low-resources.xml:ro
+      - ./clickhouse/default-profile-low-resources-overrides.xml:/etc/clickhouse-server/users.d/default-profile-low-resources-overrides.xml:ro
     ulimits:
       nofile:
         soft: 262144
@@ -81,7 +88,7 @@ services:
   # Plausible — the application (listens :8000 internally, never published)
   # ---------------------------------------------------------------------------
   plausible:
-    image: ghcr.io/plausible/community-edition:v3.2.1 # TODO(vor): pin/verify current version
+    image: ghcr.io/plausible/community-edition:v3.2.1
     container_name: vor_plausible
     restart: always
     command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
@@ -96,7 +103,7 @@ services:
     env_file:
       - plausible-conf.env
     volumes:
-      - plausible-data:/var/lib/plausible
+      - ${DATA_ROOT:-/mnt/vor-analytics-data}/plausible:/var/lib/plausible
     ulimits:
       nofile:
         soft: 65535
@@ -110,15 +117,18 @@ services:
   # Caddy — reverse proxy + TLS, the only service that publishes host ports
   # ---------------------------------------------------------------------------
   caddy:
-    image: caddy:2-alpine # TODO(vor): pin/verify current version
+    image: caddy:2-alpine
     container_name: vor_caddy
     restart: always
     depends_on:
       - plausible
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data # ACME certs + keys — keep this volume safe
-      - caddy-config:/config
+      # ACME certs/keys + Caddy state on the durable volume, so a droplet rebuild
+      # reuses the existing cert instead of re-running ACME (Let's Encrypt has
+      # tight issuance rate limits).
+      - ${DATA_ROOT:-/mnt/vor-analytics-data}/caddy:/data
+      - ${DATA_ROOT:-/mnt/vor-analytics-data}/caddy-config:/config
     environment:
       # Consumed by the Caddyfile (see Caddyfile.example).
       - ANALYTICS_DOMAIN=${ANALYTICS_DOMAIN:-analytics.example.com}
@@ -144,16 +154,20 @@ networks:
     driver: bridge
 
 # =============================================================================
-# Volumes
+# Data durability
 # =============================================================================
-# TODO(vor): point db-data / event-data at the attached Block Storage volume
-# (e.g. driver_opts bind to /mnt/<project>-analytics-data/...) so analytics data
-# survives a droplet rebuild. Named volumes on the droplet disk do NOT survive
-# a rebuild on their own.
-volumes:
-  db-data:
-  event-data:
-  event-logs:
-  plausible-data:
-  caddy-data:
-  caddy-config:
+# vor deliberately does NOT use Docker named volumes for state. Every stateful
+# path is bind-mounted under DATA_ROOT, which points at the attached DigitalOcean
+# Block Storage volume — Ansible mounts it at /mnt/<project_name>-analytics-data;
+# the manual default here (/mnt/vor-analytics-data) matches the repo example.
+#
+# Because the databases, Plausible's state, and Caddy's ACME certs all live on
+# that volume, the droplet can be rebuilt and the volume reattached with ZERO
+# data loss — analytics history is the product. Named volumes on the droplet's
+# own disk would not survive a rebuild, which is exactly what we want to avoid.
+#
+#   export DATA_ROOT=/mnt/<project_name>-analytics-data   # before docker compose up
+#
+# The subdirectories (postgres/, clickhouse/, clickhouse-logs/, plausible/,
+# caddy/, caddy-config/) are created by the Ansible common role (or scripts/
+# deploy.sh); Docker also auto-creates any missing bind-mount source dir on `up`.

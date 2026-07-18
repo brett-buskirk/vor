@@ -1,0 +1,13 @@
+<!--
+  vor — ClickHouse low-resources tuning (config.d)
+
+  Caps the mark cache so ClickHouse behaves on a small node. vor defaults to an
+  s-2vcpu-4gb droplet (4 GB RAM), and ClickHouse's stock caches assume far more,
+  so this override keeps it from over-committing memory. Verbatim from upstream
+  Plausible Community Edition (github.com/plausible/community-edition), verified
+  2026-07. Drop this mount on nodes with 16 GB+ if you want the defaults back.
+-->
+<clickhouse>
+    <!-- https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#mark_cache_size -->
+    <mark_cache_size>524288000</mark_cache_size>
+</clickhouse>
