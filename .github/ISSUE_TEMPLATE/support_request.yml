@@ -1,0 +1,47 @@
+name: Support / trouble deploying
+description: Having trouble getting vor deployed or configured?
+labels: ["support", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing an issue, please check the [CUSTOMIZATION.md](https://github.com/brett-buskirk/vor/blob/main/CUSTOMIZATION.md) guide — most deployment questions are answered there.
+
+  - type: textarea
+    id: what-youre-trying
+    attributes:
+      label: What are you trying to do?
+      description: Describe what you're deploying and where you're stuck.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Paste the error output or describe the unexpected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Help us understand your setup.
+      placeholder: |
+        - Terraform version:
+        - Ansible version:
+        - DigitalOcean region:
+        - OS (control machine):
+        - Tailscale version:
+        - Plausible / Community Edition version:
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: docs
+    attributes:
+      label: Before filing
+      options:
+        - label: I read CUSTOMIZATION.md and README.md
+          required: true

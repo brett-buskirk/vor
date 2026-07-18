@@ -1,0 +1,26 @@
+---
+extends: default
+
+rules:
+  # Long lines exist in comments and Jinja2 templates — warn, don't error.
+  line-length:
+    max: 200
+    level: warning
+
+  # Role task files conventionally have a comment header above ---.
+  document-start: disable
+
+  # ansible-lint already enforces truthy values; keep this for non-Ansible YAML.
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false
+
+  # One blank line between top-level keys is common in Ansible vars files.
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1
+
+  # Single space after # is sufficient; avoid mandating two spaces.
+  comments:
+    min-spaces-from-content: 1

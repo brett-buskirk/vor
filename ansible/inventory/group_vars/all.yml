@@ -1,0 +1,70 @@
+---
+# =============================================================================
+# Ansible Group Variables — All Hosts (vor)
+# =============================================================================
+# REQUIRED before running the playbook:
+#   project_name      — must match terraform.tfvars
+#   analytics_domain  — public hostname (Plausible BASE_URL + public TLS host)
+#
+# SECRETS DO NOT LIVE HERE. Plausible's SECRET_KEY_BASE, TOTP_VAULT_KEY, the
+# database passwords, SMTP creds, and the Tailscale auth key are read from a
+# gitignored env file / Ansible Vault / -e extra vars — see plausible_env_file
+# and roles/tailscale. Never commit real secrets to this file.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Project (REQUIRED — must match terraform project_name)
+# -----------------------------------------------------------------------------
+project_name: "your-project-name"
+
+# Public hostname for Plausible (becomes BASE_URL and the public ACME TLS host)
+analytics_domain: "analytics.example.com"
+
+# Where the Docker Compose stack is deployed (mirrors TF local.project_dir)
+project_dir: "/opt/{{ project_name }}"
+
+deploy_environment: production
+timezone: America/New_York
+
+# -----------------------------------------------------------------------------
+# Image versions
+# -----------------------------------------------------------------------------
+# TODO(vor): pin/verify against https://github.com/plausible/community-edition
+# These override the same-named defaults in roles/plausible/defaults/main.yml —
+# keep them in lockstep with docker/plausible/docker-compose.yml.
+plausible_image: "ghcr.io/plausible/community-edition:v3.2.1"
+plausible_postgres_image: "postgres:16-alpine"
+plausible_clickhouse_image: "clickhouse/clickhouse-server:24.12-alpine"
+plausible_caddy_image: "caddy:2-alpine"
+
+# -----------------------------------------------------------------------------
+# Caddy / networking — the public-vs-Tailscale split
+# -----------------------------------------------------------------------------
+# ACME contact address for the public ingestion certificate.
+caddy_acme_email: "admin@example.com"
+
+# The droplet's PUBLIC IP that Caddy's public 80/443 listeners bind to.
+# TODO(vor): source this from the Terraform output rather than hardcoding.
+public_ip: "203.0.113.10"
+
+# The droplet's TAILSCALE IP that Caddy's dashboard listener binds to.
+# TODO(vor): fill in after `tailscale up` (tailscale ip -4), or template it
+# from a fact once the tailscale role has run.
+tailscale_ip: "100.100.100.100"
+
+# -----------------------------------------------------------------------------
+# Tailscale — admin dashboard surface
+# -----------------------------------------------------------------------------
+# The auth key is a SECRET — do NOT store it here. Pass it at runtime:
+#   ansible-playbook ... -e "tailscale_auth_key=tskey-auth-xxxx"
+# or pull it from Ansible Vault. See roles/tailscale.
+tailscale_up_args: "--ssh"
+
+# -----------------------------------------------------------------------------
+# Secrets (referenced, never stored)
+# -----------------------------------------------------------------------------
+# Path (relative to the playbook) to the gitignored env file rendered into the
+# stack. Copy docker/plausible/plausible-conf.env.example, fill it in, and keep
+# it OUT of git.
+# TODO(vor): or switch to Ansible Vault and template plausible-conf.env instead.
+plausible_env_file: "../../docker/plausible/plausible-conf.env"

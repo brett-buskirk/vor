@@ -1,0 +1,22 @@
+---
+# =============================================================================
+# Ansible Inventory — Manual Configuration (vor)
+# =============================================================================
+# Copy this file to manual.yml and replace the placeholder IP with your
+# droplet's public IP (terraform output droplet_ip). manual.yml is gitignored.
+#
+# A single node runs the entire Plausible stack, so there is just one host in
+# the `analytics` group.
+#
+# Usage:
+#   ansible-playbook -i inventory/manual.yml playbooks/site.yml
+# =============================================================================
+
+all:
+  children:
+    analytics:
+      hosts:
+        analytics-node:
+          ansible_host: ANALYTICS_NODE_PUBLIC_IP
+          ansible_user: root
+          ansible_python_interpreter: /usr/bin/python3

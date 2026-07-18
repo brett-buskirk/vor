@@ -1,0 +1,105 @@
+# =============================================================================
+# Security Role — System Hardening
+# =============================================================================
+# SSH hardening + fail2ban + a host firewall (UFW) that mirrors vor's port
+# model. The cloud firewall (Terraform) is the primary control; UFW is
+# defense-in-depth.
+# =============================================================================
+---
+- name: Install security packages
+  ansible.builtin.apt:
+    name:
+      - fail2ban
+      - ufw
+    state: present
+
+# ---------------------------------------------------------------------------
+# SSH Hardening
+# ---------------------------------------------------------------------------
+- name: Disable root password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin prohibit-password"
+    state: present
+  notify: Restart SSH
+
+- name: Disable password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+    state: present
+  notify: Restart SSH
+
+# ---------------------------------------------------------------------------
+# Fail2ban
+# ---------------------------------------------------------------------------
+- name: Configure fail2ban for SSH
+  ansible.builtin.copy:
+    content: |
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 5
+      bantime = 3600
+      findtime = 600
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Start and enable fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: started
+    enabled: true
+
+# ---------------------------------------------------------------------------
+# UFW — vor port model
+# ---------------------------------------------------------------------------
+# 80 + 443 : world-open (public event ingestion + ACME TLS)
+# 22       : allowed (further restricted to known IPs by the cloud firewall)
+# Tailscale: allow everything arriving on the tailscale0 interface — the admin
+#            dashboard is served there. Postgres/ClickHouse are NEVER opened;
+#            they stay on the internal Docker network.
+- name: Set UFW default incoming policy to deny
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set UFW default outgoing policy to allow
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Allow HTTP (public ingestion + ACME)
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+
+- name: Allow HTTPS (public ingestion)
+  community.general.ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+
+# TODO(vor): allow all traffic on the Tailscale interface so the dashboard is
+# reachable over the tailnet without opening any public port. Confirm the
+# interface name (usually tailscale0) after the tailscale role runs:
+#   community.general.ufw:
+#     rule: allow
+#     interface: tailscale0
+#     direction: in
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled

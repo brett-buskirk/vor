@@ -1,0 +1,159 @@
+# =============================================================================
+# vor — Plausible Analytics Stack (Docker Compose)
+# =============================================================================
+# Self-hosted Plausible Community Edition. Deploy via the Ansible `plausible`
+# role for production; this file is the parallel manual/run-by-hand path and
+# must stay consistent with roles/plausible/templates/.
+#
+# Services:
+#   plausible            — the app (listens :8000 inside the network only)
+#   plausible_db         — PostgreSQL: accounts, site config, metadata
+#   plausible_events_db  — ClickHouse: the analytics events (the big table)
+#   caddy                — reverse proxy + TLS; the ONLY service that publishes
+#                          host ports
+#
+# ── THE DEFINING SPLIT ──────────────────────────────────────────────────────
+# vor MUST expose a PUBLIC event-ingestion endpoint — visitors on tracked sites
+# POST to it. So Caddy serves PUBLICLY (80/443, from anywhere) ONLY the tracking
+# script path /js/* and the event API /api/event (plus ACME/health). The admin
+# DASHBOARD (/, /login, /settings, everything else) is bound to the TAILSCALE
+# interface only. Postgres (5432) and ClickHouse (8123/9000) are never
+# published — they stay on the internal Docker network. See ./Caddyfile.example.
+#
+# TODO(vor): verify all image versions against the upstream Community Edition:
+# https://github.com/plausible/community-edition
+#
+# Usage (manual path):
+#   cp plausible-conf.env.example plausible-conf.env   # then fill in secrets
+#   export PUBLIC_IP=<droplet public ip> TAILSCALE_IP=<droplet tailscale ip>
+#   docker compose up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — accounts, site configuration, metadata
+  # ---------------------------------------------------------------------------
+  plausible_db:
+    image: postgres:16-alpine # TODO(vor): pin/verify current version
+    container_name: vor_plausible_db
+    restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      # TODO(vor): set a strong password (matches DATABASE_URL in the env file).
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CHANGE_ME_STRONG_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      start_period: 1m
+    # No ports: — Postgres is reachable only on the internal network.
+    networks:
+      - vor
+
+  # ---------------------------------------------------------------------------
+  # ClickHouse — the analytics events store
+  # ---------------------------------------------------------------------------
+  plausible_events_db:
+    image: clickhouse/clickhouse-server:24.12-alpine # TODO(vor): pin/verify current version
+    container_name: vor_plausible_events_db
+    restart: always
+    volumes:
+      - event-data:/var/lib/clickhouse
+      - event-logs:/var/log/clickhouse-server
+      # Plausible's recommended ClickHouse tweaks (reduce logging; IPv4-only).
+      - ./clickhouse/logs.xml:/etc/clickhouse-server/config.d/logs.xml:ro
+      - ./clickhouse/ipv4-only.xml:/etc/clickhouse-server/config.d/ipv4-only.xml:ro
+      # TODO(vor): upstream also ships low-resources.xml + a users.d override for
+      # small nodes — add them here if you deploy on a constrained droplet.
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 -O - http://127.0.0.1:8123/ping || exit 1"]
+      start_period: 1m
+    # No ports: — ClickHouse (8123/9000) is reachable only on the internal network.
+    networks:
+      - vor
+
+  # ---------------------------------------------------------------------------
+  # Plausible — the application (listens :8000 internally, never published)
+  # ---------------------------------------------------------------------------
+  plausible:
+    image: ghcr.io/plausible/community-edition:v3.2.1 # TODO(vor): pin/verify current version
+    container_name: vor_plausible
+    restart: always
+    command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
+    depends_on:
+      plausible_db:
+        condition: service_healthy
+      plausible_events_db:
+        condition: service_healthy
+    # Secrets + connection strings live in a gitignored env file (never commit
+    # the real one — only plausible-conf.env.example). CI creates it from the
+    # example to validate this compose file.
+    env_file:
+      - plausible-conf.env
+    volumes:
+      - plausible-data:/var/lib/plausible
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    # No ports: — Caddy is the only public entrypoint. Plausible is reached at
+    # the internal DNS name `plausible:8000`.
+    networks:
+      - vor
+
+  # ---------------------------------------------------------------------------
+  # Caddy — reverse proxy + TLS, the only service that publishes host ports
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine # TODO(vor): pin/verify current version
+    container_name: vor_caddy
+    restart: always
+    depends_on:
+      - plausible
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # ACME certs + keys — keep this volume safe
+      - caddy-config:/config
+    environment:
+      # Consumed by the Caddyfile (see Caddyfile.example).
+      - ANALYTICS_DOMAIN=${ANALYTICS_DOMAIN:-analytics.example.com}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    ports:
+      # PUBLIC ingestion + ACME TLS — bound to the droplet's PUBLIC IP so the
+      # world can reach /js/* and /api/event. TODO(vor): set PUBLIC_IP.
+      - "${PUBLIC_IP:-203.0.113.10}:80:80"
+      - "${PUBLIC_IP:-203.0.113.10}:443:443"
+      # ADMIN dashboard — bound to the TAILSCALE IP only, never the public IP.
+      # Caddy serves the dashboard on :8443 internally; publishing it solely on
+      # the tailnet address keeps it off the public internet.
+      # TODO(vor): set TAILSCALE_IP (tailscale ip -4 on the droplet).
+      - "${TAILSCALE_IP:-100.100.100.100}:443:8443"
+    networks:
+      - vor
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  vor:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+# TODO(vor): point db-data / event-data at the attached Block Storage volume
+# (e.g. driver_opts bind to /mnt/<project>-analytics-data/...) so analytics data
+# survives a droplet rebuild. Named volumes on the droplet disk do NOT survive
+# a rebuild on their own.
+volumes:
+  db-data:
+  event-data:
+  event-logs:
+  plausible-data:
+  caddy-data:
+  caddy-config:

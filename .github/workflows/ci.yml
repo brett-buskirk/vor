@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Terraform: fmt, validate, tflint
+  # ---------------------------------------------------------------------------
+  terraform:
+    name: Terraform (fmt · validate · tflint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive terraform/
+
+      - name: terraform init
+        run: terraform -chdir=terraform/environments/example init -backend=false
+
+      - name: terraform validate
+        run: terraform -chdir=terraform/environments/example validate
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: tflint init
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: tflint
+        run: tflint --chdir=terraform/environments/example
+
+  # ---------------------------------------------------------------------------
+  # Terraform security: tfsec
+  # ---------------------------------------------------------------------------
+  security:
+    name: Terraform security (tfsec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform/
+          soft_fail: true   # advisory until baseline reviewed
+
+  # ---------------------------------------------------------------------------
+  # Ansible: ansible-lint
+  # ---------------------------------------------------------------------------
+  ansible:
+    name: Ansible (ansible-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install ansible-lint
+          ansible-galaxy collection install community.general
+
+      - name: ansible-lint
+        run: ansible-lint ansible/
+
+  # ---------------------------------------------------------------------------
+  # YAML: yamllint
+  # ---------------------------------------------------------------------------
+  yaml:
+    name: YAML (yamllint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: yamllint
+        run: yamllint .
+
+  # ---------------------------------------------------------------------------
+  # Shell: shellcheck
+  # ---------------------------------------------------------------------------
+  shell:
+    name: Shell (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: ./scripts
+
+  # ---------------------------------------------------------------------------
+  # Docker: validate the Plausible compose file
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker (compose config)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # `docker compose config` needs the referenced env file to exist. Create
+      # it from the tracked example (placeholder values only — no secrets).
+      - name: Stage placeholder env file
+        run: cp docker/plausible/plausible-conf.env.example docker/plausible/plausible-conf.env
+
+      - name: docker compose config
+        run: docker compose -f docker/plausible/docker-compose.yml config -q

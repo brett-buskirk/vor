@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/brett-buskirk/vor#readme
+    about: Check the README for quickstart and configuration reference.
+  - name: Customization guide
+    url: https://github.com/brett-buskirk/vor/blob/main/CUSTOMIZATION.md
+    about: Step-by-step guide to deploying vor for your sites.
+  - name: Discussions
+    url: https://github.com/brett-buskirk/vor/discussions
+    about: Questions, ideas, and general discussion.
