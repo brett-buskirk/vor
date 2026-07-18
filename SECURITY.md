@@ -36,3 +36,9 @@ Vör is an Infrastructure-as-Code template for a self-hosted analytics host. Key
 - **Privacy by design.** Plausible is cookieless and collects no personal data; self-hosting keeps
   visitor data on infrastructure you control.
 - **Image versions are pinned.** Docker image tags are explicit; Dependabot monitors for updates.
+
+## Security review
+
+A written review of the perimeter — the Cloud Firewall, the Caddy public/private split, data-store
+isolation, host hardening, and secrets — including the threat model, residual risks, and the go-live
+verification steps, is in **[docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md)**.
