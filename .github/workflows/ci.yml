@@ -105,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ludeeus/action-shellcheck@master
+      - uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: ./scripts
 
@@ -125,3 +125,24 @@ jobs:
 
       - name: docker compose config
         run: docker compose -f docker/plausible/docker-compose.yml config -q
+
+  # ---------------------------------------------------------------------------
+  # Caddy: validate the reverse-proxy config (the public/private split)
+  # ---------------------------------------------------------------------------
+  # The Caddyfile is the security-critical file in the repo. Validate it with the
+  # real Caddy binary so a broken split (or a bad staging-CA edit) fails CI. The
+  # example uses {$ANALYTICS_DOMAIN} / {$ACME_EMAIL} env placeholders.
+  caddy:
+    name: Caddy (validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: caddy validate
+        run: |
+          cp docker/plausible/Caddyfile.example docker/plausible/Caddyfile
+          docker run --rm \
+            -e ANALYTICS_DOMAIN=analytics.example.com \
+            -e ACME_EMAIL=admin@example.com \
+            -v "$PWD/docker/plausible/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
