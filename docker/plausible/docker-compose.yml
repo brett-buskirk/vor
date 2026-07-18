@@ -43,9 +43,12 @@ services:
       # On the attached Block Storage volume (DATA_ROOT) so accounts + site
       # config survive a droplet rebuild. See "Data durability" at the bottom.
       - ${DATA_ROOT:-/mnt/vor-analytics-data}/postgres:/var/lib/postgresql/data
-    environment:
-      # TODO(vor): set a strong password (matches DATABASE_URL in the env file).
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CHANGE_ME_STRONG_PASSWORD}
+    # POSTGRES_PASSWORD is read from the shared secret env file — the SAME file
+    # the app uses — so a plain `docker compose up` works without any shell env
+    # and the password can never drift from the one inside the app's
+    # DATABASE_URL. (Postgres ignores the app-only vars in that file.)
+    env_file:
+      - plausible-conf.env
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       start_period: 1m
