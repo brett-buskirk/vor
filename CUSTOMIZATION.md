@@ -175,7 +175,8 @@ docker compose pull && docker compose up -d
 docker compose logs -f plausible
 ```
 
-Back up the databases (see `scripts/backup.sh` — `pg_dump` + ClickHouse export, optionally to Spaces).
+Back up the databases — see **[docs/BACKUP.md](docs/BACKUP.md)** for the strategy (volume snapshots plus
+`scripts/backup.sh` logical dumps) and the restore procedure.
 
 ---
 

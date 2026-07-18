@@ -1,57 +1,88 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Backup — PostgreSQL + ClickHouse to a DigitalOcean Spaces bucket
+# Backup — logical dump of the Plausible databases (PostgreSQL + ClickHouse)
 # =============================================================================
-# Dumps the Plausible databases and uploads them to object storage. Intended to
-# run ON the droplet (via cron) or over SSH.
+# Runs ON the droplet, against the live stack in PROJECT_DIR. Writes a
+# timestamped set of dumps to BACKUP_DIR and, if SPACES_BUCKET is set, uploads
+# them to a DigitalOcean Spaces bucket.
 #
-# This is a SKELETON. The commands below are the intended shape; fill in the
-# TODO(vor) markers before relying on it.
+#   PostgreSQL — pg_dump of the metadata DB (accounts, site config).
+#   ClickHouse — per-table logical dump (schema + data in Native format).
+#
+# This is the manual/on-demand path. Scheduling (cron/systemd timer), retention,
+# and failure alerting are post-1.0 — see docs/BACKUP.md. For the cheapest
+# disaster-recovery hedge, snapshot the whole data volume (docs/BACKUP.md too):
+# every stateful path lives on it.
 #
 # Usage:
 #   ./scripts/backup.sh
+#   SPACES_BUCKET=my-vor-backups ./scripts/backup.sh     # + offsite copy
 # =============================================================================
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # Configuration (override via environment)
 # -----------------------------------------------------------------------------
-PROJECT_DIR="${PROJECT_DIR:-/opt/vor}" # TODO(vor): match Terraform's /opt/<project_name>
-BACKUP_DIR="${BACKUP_DIR:-/tmp/vor-backup}"
+PROJECT_NAME="${PROJECT_NAME:-vor}"
+PROJECT_DIR="${PROJECT_DIR:-/opt/${PROJECT_NAME}}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/${PROJECT_NAME}}"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+DEST="${BACKUP_DIR}/${TIMESTAMP}"
 
-# DO Spaces target. TODO(vor): source these from the environment / a secrets
-# manager — never hardcode credentials in this file.
-SPACES_BUCKET="${SPACES_BUCKET:-your-vor-backups}"
+# Database coordinates — must match plausible-conf.env (DATABASE_URL / CH URL).
+PG_USER="${PG_USER:-postgres}"
+PG_DB="${PG_DB:-plausible_db}"
+CH_DB="${CH_DB:-plausible_events_db}"
+
+# Optional offsite copy to DO Spaces. Leave SPACES_BUCKET empty to skip.
+# Credentials come from the environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
+# or the aws CLI config — never hardcode them here.
+SPACES_BUCKET="${SPACES_BUCKET:-}"
 SPACES_ENDPOINT="${SPACES_ENDPOINT:-nyc3.digitaloceanspaces.com}"
 
-mkdir -p "${BACKUP_DIR}"
+# Thin wrapper so every docker compose call targets the deployed stack.
+compose() { docker compose -f "${PROJECT_DIR}/docker-compose.yml" "$@"; }
+
+mkdir -p "${DEST}"
+echo "vor backup → ${DEST}"
 
 # -----------------------------------------------------------------------------
 # PostgreSQL (accounts / site config / metadata)
 # -----------------------------------------------------------------------------
-echo "Backing up PostgreSQL..."
-# TODO(vor): confirm the service name, DB name, and user. Example:
-#   docker compose -f "${PROJECT_DIR}/docker-compose.yml" exec -T plausible_db \
-#     pg_dump -U postgres plausible_db | gzip > "${BACKUP_DIR}/postgres-${TIMESTAMP}.sql.gz"
+echo "  • PostgreSQL — pg_dump ${PG_DB}"
+compose exec -T plausible_db pg_dump -U "${PG_USER}" -d "${PG_DB}" \
+  | gzip >"${DEST}/postgres-${PG_DB}.sql.gz"
 
 # -----------------------------------------------------------------------------
 # ClickHouse (the analytics events)
 # -----------------------------------------------------------------------------
-echo "Backing up ClickHouse..."
-# TODO(vor): pick a strategy — `clickhouse-backup`, a `BACKUP` statement, or a
-# volume snapshot. A simple per-table dump example:
-#   docker compose -f "${PROJECT_DIR}/docker-compose.yml" exec -T plausible_events_db \
-#     clickhouse-client --query "BACKUP DATABASE plausible_events_db TO ..."
+# Per-table logical dump: the CREATE statement plus the rows in Native format.
+# Restore with `clickhouse-client --query "INSERT INTO <db>.<table> FORMAT Native"`
+# after recreating the table from its schema file. Views are skipped (they're
+# derived). See docs/BACKUP.md for the full restore procedure.
+echo "  • ClickHouse — logical dump of ${CH_DB}"
+compose exec -T plausible_events_db clickhouse-client --query \
+  "SELECT name FROM system.tables WHERE database = '${CH_DB}' AND engine NOT LIKE '%View%'" \
+  | while IFS= read -r table; do
+      [ -z "${table}" ] && continue
+      echo "      - ${table}"
+      compose exec -T plausible_events_db clickhouse-client --query \
+        "SHOW CREATE TABLE ${CH_DB}.${table}" >"${DEST}/clickhouse-${table}.schema.sql"
+      compose exec -T plausible_events_db clickhouse-client --query \
+        "SELECT * FROM ${CH_DB}.${table} FORMAT Native" \
+        | gzip >"${DEST}/clickhouse-${table}.native.gz"
+    done
 
 # -----------------------------------------------------------------------------
-# Upload to DO Spaces
+# Optional offsite copy to DO Spaces
 # -----------------------------------------------------------------------------
-echo "Uploading to s3://${SPACES_BUCKET} (${SPACES_ENDPOINT})..."
-# TODO(vor): use s3cmd / aws-cli configured for DO Spaces, e.g.:
-#   aws --endpoint-url "https://${SPACES_ENDPOINT}" s3 cp \
-#     "${BACKUP_DIR}/" "s3://${SPACES_BUCKET}/${TIMESTAMP}/" --recursive
+if [ -n "${SPACES_BUCKET}" ]; then
+  echo "  • Upload → s3://${SPACES_BUCKET}/${PROJECT_NAME}/${TIMESTAMP}/"
+  aws --endpoint-url "https://${SPACES_ENDPOINT}" s3 cp \
+    "${DEST}/" "s3://${SPACES_BUCKET}/${PROJECT_NAME}/${TIMESTAMP}/" --recursive
+else
+  echo "  • Offsite upload skipped (set SPACES_BUCKET to enable)"
+fi
 
-# TODO(vor): prune old backups (retention policy) and alert on failure.
-
-echo "Backup skeleton finished for ${TIMESTAMP} (no data moved — fill in the TODOs)."
+echo "Backup complete: ${DEST}"
+echo "Scheduling, retention, and alerting are post-1.0 — see docs/BACKUP.md."
