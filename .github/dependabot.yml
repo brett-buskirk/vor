@@ -1,9 +1,14 @@
 version: 2
 updates:
+  # ---------------------------------------------------------------------------
+  # Terraform provider(s) — resolved in the example environment (holds the lock)
+  # ---------------------------------------------------------------------------
   - package-ecosystem: terraform
     directory: "/terraform/environments/example"
     schedule:
       interval: monthly
+    assignees: ["brett-buskirk"]
+    labels: ["dependencies", "terraform"]
     groups:
       minor-and-patch:
         patterns: ["*"]
@@ -12,13 +17,43 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
+  # ---------------------------------------------------------------------------
+  # GitHub Actions used by the CI workflows
+  # ---------------------------------------------------------------------------
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: monthly
+    assignees: ["brett-buskirk"]
+    labels: ["dependencies", "ci"]
     groups:
       github-actions:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ---------------------------------------------------------------------------
+  # Pinned stack images in the Plausible compose file
+  # (Postgres, ClickHouse, Plausible CE, Caddy). Docker Compose support is GA.
+  #
+  # IMPORTANT: these same four images are ALSO pinned in the Ansible layer —
+  # ansible/inventory/group_vars/all.yml and roles/plausible/defaults/main.yml —
+  # which Dependabot cannot see. When a bump PR from here lands, mirror the new
+  # tag into those two files so the manual and Ansible deploy paths stay in
+  # lockstep. Majors (e.g. a Postgres or Plausible major) are intentionally
+  # ignored: they can need a data migration and are handled by hand.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: docker
+    directory: "/docker/plausible"
+    schedule:
+      interval: monthly
+    assignees: ["brett-buskirk"]
+    labels: ["dependencies", "docker"]
+    groups:
+      stack-images:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
