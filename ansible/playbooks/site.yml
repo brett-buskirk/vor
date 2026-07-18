@@ -42,8 +42,9 @@
 
           Next steps:
           1. Confirm DNS for {{ analytics_domain }} points at this droplet.
-          2. Create the first user (registration is disabled by default):
-             docker compose -f {{ project_dir }}/docker-compose.yml exec \
-               plausible /entrypoint.sh db create_user ...   # TODO(vor): verify
+          2. Create your first admin (registration is disabled by default):
+             set DISABLE_REGISTRATION=false in plausible-conf.env, re-run this
+             playbook, register at the dashboard over Tailscale, then set it back
+             to invite_only (or true) and re-run. See CUSTOMIZATION.md Step 5.
           3. Add a site in the dashboard and drop the snippet on it.
           ═══════════════════════════════════════════════════════════

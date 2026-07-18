@@ -64,14 +64,20 @@ definition of done.
 ### Analytics host (droplet)
 
 A single DigitalOcean droplet runs the full stack via Docker Compose. ClickHouse is the memory-hungry
-component; the recommended floor is `s-2vcpu-4gb`. The Postgres and ClickHouse data directories live on
-an attached **Block Storage volume**, so the analytics history survives a droplet rebuild or resize.
+component; the recommended floor is `s-2vcpu-4gb`. **Every stateful path** — the Postgres and ClickHouse
+data directories, Plausible's own state, and Caddy's ACME certificates — is bind-mounted under a single
+`DATA_ROOT` (`/mnt/<project_name>-analytics-data`) pointed at an attached **Block Storage volume**. So the
+droplet can be rebuilt or resized and the volume reattached with zero data loss (and no ACME re-issuance).
+Vör deliberately uses no Docker named volumes, which would live on the droplet's ephemeral disk.
 
 ### Caddy (reverse proxy + TLS)
 
 The perimeter. Caddy terminates TLS (automatic ACME certificates for `analytics_domain`) and enforces the
-public/private split described above. It is the only container that publishes ports to the host
-(`80`/`443`). Its config is the security-critical file in the repo — see `docker/plausible/Caddyfile.example`.
+public/private split described above. It is the only container that publishes host ports — and it does so
+on **two different interfaces**: `80`/`443` on the droplet's public IP (ingestion + ACME), and `443` on
+the droplet's Tailscale IP mapped to Caddy's internal `:8443` dashboard listener. That per-interface
+binding is what keeps the dashboard off the public internet at the OS layer, on top of the path rules in
+the Caddyfile. Its config is the security-critical file in the repo — see `docker/plausible/Caddyfile.example`.
 
 ### Plausible CE
 
@@ -88,8 +94,9 @@ never published. Data on the block-storage volume.
 ### ClickHouse
 
 Stores the analytics events — the columnar store that makes Plausible's aggregations fast. Internal only.
-Plausible ships recommended ClickHouse tuning (reduced logging, IPv4) applied via
-`docker/plausible/clickhouse/`. Data on the block-storage volume.
+Plausible's recommended ClickHouse tuning is applied via `docker/plausible/clickhouse/`: reduced logging
+and IPv4-only everywhere, plus low-resources caps (mark cache + single-threaded query profile) tuned for
+the `s-2vcpu-4gb` default node. Data on the block-storage volume.
 
 ---
 
@@ -140,8 +147,9 @@ A single `project_name` threads through the stack (mirroring heimdall):
 |---|---|
 | Droplet name | `<project_name>-analytics` |
 | Cloud Firewall name | `<project_name>-analytics-firewall` |
-| Block storage volume | `<project_name>-data` |
-| Resource tags | `[analytics, <project_name>]` |
+| Block storage volume | `<project_name>-analytics-data` |
+| Volume mount (data root) | `/mnt/<project_name>-analytics-data` |
+| Resource tags | `[<project_name>, analytics, plausible]` |
 | Project directory (on host) | `/opt/<project_name>` |
 
 `analytics_domain` (e.g. `analytics.example.com`) drives Caddy's TLS and Plausible's `BASE_URL`.
