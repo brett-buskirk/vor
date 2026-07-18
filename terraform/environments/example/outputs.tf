@@ -42,6 +42,11 @@ output "dashboard_access" {
   value       = "Join the tailnet, then browse to the droplet's Tailscale hostname/IP over HTTPS. See CUSTOMIZATION.md."
 }
 
+output "project_dir" {
+  description = "Directory on the droplet where the Docker Compose stack lives (keep in sync with ansible/inventory/group_vars/all.yml)"
+  value       = local.project_dir
+}
+
 output "teardown_hint" {
   description = "Teardown reminder — the data volume is destroyed with the stack"
   value       = "terraform destroy removes the droplet, firewall, AND the data volume (analytics data is lost). Snapshot the volume or run scripts/backup.sh first if you need to keep the data."
