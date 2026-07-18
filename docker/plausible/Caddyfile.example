@@ -1,37 +1,47 @@
 # =============================================================================
-# vor — Caddyfile (example / skeleton)
+# vor — Caddyfile (example)
 # =============================================================================
-# THIS IS THE TRICKIEST PIECE OF THE STACK. Read the whole file before editing.
+# THE SECURITY CENTERPIECE OF THE STACK. Read the whole file before editing.
 #
-# Copy to `Caddyfile` and adjust. It defines TWO separate sites that both proxy
-# to the same Plausible app (plausible:8000) but expose very different surfaces:
+# Copy to `Caddyfile`. It defines TWO sites that both proxy the same Plausible
+# app (plausible:8000) but expose very different surfaces:
 #
-#   1. PUBLIC site  — {$ANALYTICS_DOMAIN}, world-reachable on :80/:443.
-#                     Serves ONLY the tracking script (/js/*) and the event API
-#                     (/api/event). Everything else returns 404. TLS via ACME.
+#   1. PUBLIC site   — {$ANALYTICS_DOMAIN}, world-reachable on :80/:443 (bound to
+#                      the droplet's PUBLIC IP in docker-compose.yml). Serves ONLY
+#                      the tracking script (/js/*) and the event API (/api/event);
+#                      everything else returns 404. TLS via Let's Encrypt (ACME).
 #
-#   2. DASHBOARD site — the admin UI (/, /login, /settings, …). Bound to the
-#                     TAILSCALE interface only (published on the tailnet IP in
-#                     docker-compose.yml), served on Caddy's internal :8443.
-#                     Reachable ONLY from devices on the same tailnet.
+#   2. DASHBOARD site — the admin UI (/, /login, /settings, the stats pages, …).
+#                      Caddy serves it on :8443, which docker-compose.yml publishes
+#                      ONLY on the droplet's TAILSCALE IP. Reachable solely from
+#                      devices on the same tailnet; never from the public internet.
 #
 # Why the split: visitors on tracked sites must POST events to a public URL, but
 # the dashboard must NOT be public. Splitting by path on the public hostname and
-# binding the dashboard to Tailscale gives public ingestion + private admin.
+# binding the dashboard listener to the Tailscale IP gives public ingestion with
+# a private admin surface — the defining design decision of vor.
 #
-# TODO(vor): validate this against `caddy validate` and a real deploy — path
-# matchers, the 404 fallthrough, and the Tailscale listener are the bits most
-# likely to need tuning for the current Plausible version.
+# The public/private boundary is enforced in TWO independent layers:
+#   - here (Caddy only serves /js/* + /api/event on the public hostname), and
+#   - in docker-compose.yml (the :8443 dashboard listener is published only on
+#     the Tailscale IP, so the OS never routes public traffic to it at all).
+#
+# Validate before deploying:
+#   docker run --rm -e ANALYTICS_DOMAIN=analytics.example.com \
+#     -e ACME_EMAIL=admin@example.com \
+#     -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+#     caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # Global options
 # -----------------------------------------------------------------------------
 {
-	# ACME contact for the public certificate. TODO(vor): set via {$ACME_EMAIL}.
+	# ACME contact for the public certificate (set via {$ACME_EMAIL} in compose).
 	email {$ACME_EMAIL}
-	# TODO(vor): while testing, point ACME at Let's Encrypt staging to avoid
-	# rate limits:
+
+	# While testing, point ACME at Let's Encrypt staging to avoid burning the
+	# strict production rate limits, then remove this line for the real cert:
 	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
 
@@ -42,42 +52,48 @@
 # Caddy auto-provisions a Let's Encrypt cert for {$ANALYTICS_DOMAIN}.
 {$ANALYTICS_DOMAIN} {
 	# Match ONLY the public surface: the tracking script and the event API.
-	@public {
-		path /js/* /api/event /api/event/
-	}
+	# /js/*        — script.js and its extension variants (outbound-links, etc.)
+	# /api/event   — the ingestion endpoint every visitor's browser POSTs to
+	@public path /js/* /api/event /api/event/
+
 	handle @public {
 		reverse_proxy plausible:8000
 	}
 
-	# Optional: expose a health endpoint for uptime checks.
-	# handle /api/health {
-	# 	reverse_proxy plausible:8000
-	# }
-
-	# Everything else on the public hostname is NOT served here (the dashboard
-	# lives on the Tailscale site below). Return 404 so the admin UI, login, and
-	# settings are never reachable from the public internet.
+	# Everything else on the public hostname is refused — the dashboard, login,
+	# settings, and stats API live on the Tailscale site below and must never be
+	# reachable from the public internet. Return 404 (not 403) so the public
+	# surface gives nothing away about what else is running here.
 	handle {
 		respond "Not found" 404
 	}
 }
 
 # -----------------------------------------------------------------------------
-# 2) ADMIN dashboard site — Tailscale-only, full app
+# 2) ADMIN dashboard site — Tailscale-only, the full app
 # -----------------------------------------------------------------------------
 # Caddy listens on :8443 here; docker-compose.yml publishes that port ONLY on
 # the droplet's Tailscale IP, so this site is reachable solely over the tailnet.
 #
-# TLS uses Caddy's internal CA (self-signed root) since this hostname isn't
-# publicly resolvable. TODO(vor): consider Tailscale-issued certs instead:
-#   tls { get_certificate tailscale }   # requires the Caddy Tailscale plugin
+# TLS uses Caddy's internal CA (self-signed root) because this listener has no
+# publicly resolvable hostname — your browser will prompt to trust it once, or
+# you can install Caddy's root CA. For a trusted cert over Tailscale instead,
+# use the droplet's MagicDNS name as the site address and the Caddy Tailscale
+# plugin (see the commented block below).
 :8443 {
 	tls internal
 
-	# The full Plausible app — dashboard, login, settings, API, everything.
+	# The full Plausible app — dashboard, login, settings, stats API, everything.
 	reverse_proxy plausible:8000
-
-	# TODO(vor): if you want to reach this by a friendly name, use the droplet's
-	# MagicDNS hostname (e.g. https://vor-analytics.<tailnet>.ts.net) as the site
-	# address instead of :8443 and let Tailscale/Caddy handle the cert.
 }
+
+# Optional: reach the dashboard by a trusted, friendly name over Tailscale.
+# Replace the ":8443" block above with your droplet's MagicDNS hostname and let
+# the Caddy Tailscale plugin issue a real cert (requires a plugin-enabled image):
+#
+# vor-analytics.<your-tailnet>.ts.net {
+# 	tls {
+# 		get_certificate tailscale
+# 	}
+# 	reverse_proxy plausible:8000
+# }
