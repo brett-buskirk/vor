@@ -4,9 +4,9 @@ A step-by-step guide to standing up your own privacy-first analytics host — wi
 the worked example. Once running, adding *more* sites needs no infrastructure change (see
 [docs/ADDING-A-SITE.md](docs/ADDING-A-SITE.md)).
 
-> **Scaffold note:** the repo currently ships the *shape* of the deployment (stubs + this guide). Steps
-> that run Terraform/Ansible finalize as those layers are implemented (see [ROADMAP.md](ROADMAP.md)).
-> The workflow below is the target and won't change materially.
+The whole thing is roughly a 30-minute exercise: `terraform apply` provisions the droplet, firewall, and
+data volume; `ansible-playbook` hardens the host, installs Docker + Tailscale, and brings up the stack;
+then you create your first admin over Tailscale and add a site.
 
 ---
 
@@ -68,30 +68,55 @@ Note the outputs (the droplet's public IP especially). Then **create/point the D
 
 ## Step 3 — Configure the analytics stack
 
-Copy the Plausible env template and fill it in:
+**a. Match the Ansible variables to your Terraform config.** Edit
+`ansible/inventory/group_vars/all.yml`:
+
+| Variable | Set to | Notes |
+|---|---|---|
+| `project_name` | same value as `terraform.tfvars` | derives `/opt/<project_name>` + the volume mount |
+| `analytics_domain` | e.g. `analytics.brett-buskirk.dev` | must match Terraform and `BASE_URL` |
+| `caddy_acme_email` | your email | ACME contact for the public TLS certificate |
+
+`public_ip` defaults to the inventory host address, and `tailscale_ip` is captured automatically once the
+node joins the tailnet — you don't set either by hand.
+
+**b. Fill in the Plausible secrets.** Copy the env template and generate the secrets:
 
 ```bash
 cp docker/plausible/plausible-conf.env.example docker/plausible/plausible-conf.env
-# Generate the secrets:
 openssl rand -base64 48   # -> SECRET_KEY_BASE
 openssl rand -base64 32   # -> TOTP_VAULT_KEY
-# Set BASE_URL=https://analytics.brett-buskirk.dev, SMTP settings, DISABLE_REGISTRATION=true
 ```
 
-Point the Ansible inventory at the droplet:
+Then edit `docker/plausible/plausible-conf.env`:
+- `BASE_URL=https://analytics.brett-buskirk.dev`
+- `SECRET_KEY_BASE` / `TOTP_VAULT_KEY` — the values you just generated
+- `POSTGRES_PASSWORD` **and** the password embedded in `DATABASE_URL` — set both to the *same* strong
+  value (Postgres reads the first, Plausible connects with the second; they must match)
+- SMTP settings — for invites, password resets, and email reports
+- Leave `DISABLE_REGISTRATION=true` for now; you flip it once to create your admin (Step 5)
+
+**c. Point the inventory at the droplet:**
 
 ```bash
 cp ansible/inventory/manual.yml.example ansible/inventory/manual.yml
-# Set the droplet IP under the `analytics` host
+# Set ansible_host to the droplet's public IP (terraform output droplet_ip)
 ```
 
-Then run the playbook — it hardens the host, installs Docker + Tailscale, and brings up the stack:
+**d. Run the playbook** — it hardens the host, installs Docker + Tailscale (joining the tailnet with your
+auth key), and brings up the stack:
 
 ```bash
-ansible-playbook -i ansible/inventory/manual.yml ansible/playbooks/site.yml
+ansible-playbook -i ansible/inventory/manual.yml ansible/playbooks/site.yml \
+  -e "tailscale_auth_key=tskey-auth-xxxx"
 ```
 
-`plausible-conf.env` and `manual.yml` are both gitignored.
+`plausible-conf.env` and `manual.yml` are gitignored; the Tailscale auth key is a secret passed at runtime
+— never commit it.
+
+> **Tip — dodge Let's Encrypt rate limits while testing.** Set `caddy_acme_staging: true` in
+> `group_vars/all.yml` for your first runs so Caddy uses the ACME *staging* CA (untrusted certs, but no
+> rate limit). Flip it back to `false` and re-run for the real, browser-trusted certificate.
 
 ---
 
@@ -114,7 +139,23 @@ curl -I https://<droplet-public-ip>/login                  # public dashboard: s
 
 ---
 
-## Step 5 — Add your first site
+## Step 5 — Create your first admin
+
+Vör ships with `DISABLE_REGISTRATION=true`, so there's no open sign-up. You create the first account with
+a one-time flip — and because the registration page lives on the dashboard, this happens **over
+Tailscale**, never on the public internet:
+
+1. In `docker/plausible/plausible-conf.env`, set `DISABLE_REGISTRATION=false`.
+2. Re-run the playbook — it copies the changed env up and recreates the Plausible container.
+3. Open the dashboard over Tailscale and register your admin account at `/register`.
+4. Set `DISABLE_REGISTRATION=invite_only` (lets you invite teammates later) or `true` (fully closed), and
+   re-run the playbook once more. Registration is now locked again.
+
+There is no first-user CLI in Community Edition — the register-then-lock flow above is the supported path.
+
+---
+
+## Step 6 — Add your first site
 
 In the dashboard, **+ Add website** → `brett-buskirk.dev`, and add the snippet to that site's repo. Full
 workflow (and the estate note about `brett-buskirk-dev` issue #4) in

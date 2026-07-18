@@ -11,8 +11,9 @@ no consent banner, and no third party in the loop.
 
 > Not an engineer? Read the [plain-language overview](docs/ABOUT.md) — what Vör is and why it exists, no jargon.
 
-> **Status:** scaffold. The repository shape, docs, and CI are in place; the Terraform/Ansible/Docker
-> layers are stubs being built out phase by phase (see [ROADMAP.md](ROADMAP.md)).
+> **Status:** pre-1.0. The Terraform, Ansible, and Docker/Caddy layers are implemented and CI-green — a
+> `terraform apply` + `ansible-playbook` run stands up the full stack. The live v1.0 deploy and the
+> repo's public release are the remaining milestones (see [ROADMAP.md](ROADMAP.md)).
 
 ---
 
@@ -111,8 +112,10 @@ cp terraform/environments/example/terraform.tfvars.example \
 # 1. Provision infrastructure
 cd terraform/environments/example && terraform init && terraform apply
 
-# 2. Configure the host and bring up the stack
-ansible-playbook -i ansible/inventory/manual.yml ansible/playbooks/site.yml
+# 2. Set project_name + analytics_domain in ansible/inventory/group_vars/all.yml,
+#    fill docker/plausible/plausible-conf.env, point the inventory at the droplet, then:
+ansible-playbook -i ansible/inventory/manual.yml ansible/playbooks/site.yml \
+  -e "tailscale_auth_key=tskey-auth-xxxx"
 
 # 3. Point analytics.<your-domain> at the droplet IP, then open the dashboard over Tailscale
 ```
