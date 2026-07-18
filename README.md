@@ -154,6 +154,7 @@ never published off the internal Docker network. See [SECURITY.md](SECURITY.md).
 | [docs/ABOUT.md](docs/ABOUT.md) | Plain-language overview — no jargon |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Workflow, validation gates, conventions |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and security posture |
+| [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) | Threat model & review of the firewall + Caddy split |
 | [ROADMAP.md](ROADMAP.md) | Planned phases and post-1.0 ideas |
 
 ---
