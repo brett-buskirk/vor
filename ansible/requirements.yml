@@ -1,0 +1,13 @@
+---
+# =============================================================================
+# Ansible Galaxy collection dependencies for the vor playbook
+# =============================================================================
+# Install with:
+#   ansible-galaxy collection install -r ansible/requirements.yml
+#
+#   community.general — ufw, filesystem, timezone
+#   ansible.posix     — mount (attach the Block Storage volume at data_root)
+# =============================================================================
+collections:
+  - name: community.general
+  - name: ansible.posix

@@ -92,13 +92,15 @@
     port: "443"
     proto: tcp
 
-# TODO(vor): allow all traffic on the Tailscale interface so the dashboard is
-# reachable over the tailnet without opening any public port. Confirm the
-# interface name (usually tailscale0) after the tailscale role runs:
-#   community.general.ufw:
-#     rule: allow
-#     interface: tailscale0
-#     direction: in
+# Allow everything arriving on the Tailscale interface — the admin dashboard is
+# served there. This runs before the tailscale role, but UFW accepts an
+# interface name that does not exist yet; the rule takes effect once tailscale0
+# comes up. Postgres/ClickHouse are still never opened to any interface.
+- name: Allow all traffic on the Tailscale interface (admin dashboard)
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: "{{ tailscale_interface | default('tailscale0') }}"
 
 - name: Enable UFW
   community.general.ufw:

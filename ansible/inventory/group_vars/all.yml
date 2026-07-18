@@ -23,6 +23,16 @@ analytics_domain: "analytics.example.com"
 # Where the Docker Compose stack is deployed (mirrors TF local.project_dir)
 project_dir: "/opt/{{ project_name }}"
 
+# Where analytics data lives — the mount point of the attached DO Block Storage
+# volume (mirrors TF local.volume_name). The DB + Caddy-cert bind mounts hang
+# off this, so the data survives a droplet rebuild.
+data_root: "/mnt/{{ project_name }}-analytics-data"
+
+# Stable device path DO exposes the attached volume at, derived from its name.
+# NOTE: DO truncates very long volume names in this serial — if project_name is
+# long, confirm the real path (ls -l /dev/disk/by-id/) and override here.
+data_volume_device: "/dev/disk/by-id/scsi-0DO_Volume_{{ project_name }}-analytics-data"
+
 deploy_environment: production
 timezone: America/New_York
 
@@ -43,14 +53,19 @@ plausible_caddy_image: "caddy:2-alpine"
 # ACME contact address for the public ingestion certificate.
 caddy_acme_email: "admin@example.com"
 
-# The droplet's PUBLIC IP that Caddy's public 80/443 listeners bind to.
-# TODO(vor): source this from the Terraform output rather than hardcoding.
-public_ip: "203.0.113.10"
+# The droplet's PUBLIC IP that Caddy's public 80/443 listeners bind to. Defaults
+# to the inventory host address (which IS the droplet's public IP), so it tracks
+# `terraform output droplet_ip` automatically. Override only for an unusual
+# inventory where ansible_host is not the public IP.
+public_ip: "{{ ansible_host }}"
 
-# The droplet's TAILSCALE IP that Caddy's dashboard listener binds to.
-# TODO(vor): fill in after `tailscale up` (tailscale ip -4), or template it
-# from a fact once the tailscale role has run.
+# The droplet's TAILSCALE IP that Caddy's dashboard listener binds to. Fallback
+# only — the tailscale role captures the real address (tailscale ip -4) and
+# overrides this via set_fact once the node has joined the tailnet.
 tailscale_ip: "100.100.100.100"
+
+# Interface UFW opens for the admin dashboard (see the security role).
+tailscale_interface: "tailscale0"
 
 # -----------------------------------------------------------------------------
 # Tailscale — admin dashboard surface
@@ -67,4 +82,6 @@ tailscale_up_args: "--ssh"
 # stack. Copy docker/plausible/plausible-conf.env.example, fill it in, and keep
 # it OUT of git.
 # TODO(vor): or switch to Ansible Vault and template plausible-conf.env instead.
-plausible_env_file: "../../docker/plausible/plausible-conf.env"
+# Resolved via playbook_dir so it points unambiguously at the repo's gitignored
+# docker/plausible/plausible-conf.env regardless of where ansible runs from.
+plausible_env_file: "{{ playbook_dir }}/../../docker/plausible/plausible-conf.env"

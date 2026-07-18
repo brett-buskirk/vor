@@ -2,14 +2,16 @@
 # Plausible Role — Deploy the analytics stack
 # =============================================================================
 # Renders the Docker Compose stack (Plausible + Postgres + ClickHouse + Caddy)
-# and its config into {{ project_dir }} and brings it up. The Ansible templates
-# here are the source of truth; docker/plausible/* is the parallel manual path
-# and must stay consistent with them.
+# and its config into {{ project_dir }} and brings it up.
 #
-# TODO(vor): author the Jinja2 templates under roles/plausible/templates/
-# (docker-compose.yml.j2, Caddyfile.j2, clickhouse configs) — mirror the
-# checked-in files in docker/plausible/. The env file is templated from a
-# gitignored source / Vault, never from a committed secret.
+# The Jinja2 templates under roles/plausible/templates/ (docker-compose.yml.j2,
+# Caddyfile.j2, clickhouse/*.j2) are the source of truth; docker/plausible/* is
+# the parallel manual path and must stay consistent with them. The env file is
+# copied from a gitignored source (filled from plausible-conf.env.example),
+# never from a committed secret.
+#
+# Prerequisite: the `common` role has mounted the Block Storage volume at
+# {{ data_root }} and created its data subdirectories.
 # =============================================================================
 ---
 - name: Create the stack directory structure
@@ -27,7 +29,6 @@
     dest: "{{ project_dir }}/docker-compose.yml"
     mode: "0644"
   notify: Restart plausible stack
-  # TODO(vor): create templates/docker-compose.yml.j2 (see docker/plausible/).
 
 - name: Template the Caddyfile (public ingestion + Tailscale dashboard split)
   ansible.builtin.template:
@@ -35,7 +36,6 @@
     dest: "{{ project_dir }}/Caddyfile"
     mode: "0644"
   notify: Restart plausible stack
-  # TODO(vor): create templates/Caddyfile.j2 (see docker/plausible/Caddyfile.example).
 
 - name: Template the ClickHouse config tweaks
   ansible.builtin.template:
@@ -45,8 +45,9 @@
   loop:
     - logs.xml
     - ipv4-only.xml
+    - low-resources.xml
+    - default-profile-low-resources-overrides.xml
   notify: Restart plausible stack
-  # TODO(vor): create templates/clickhouse/*.j2 (see docker/plausible/clickhouse/).
 
 - name: Install the Plausible env file (secrets — from a gitignored source / Vault)
   ansible.builtin.copy:
@@ -70,5 +71,18 @@
   register: plausible_compose_up
   changed_when: "'Started' in plausible_compose_up.stdout or 'Created' in plausible_compose_up.stdout"
 
-# TODO(vor): add a health gate — wait for https://{{ analytics_domain }}/api/health
-# (or the container healthchecks) before declaring success.
+# Readiness gate: probe Plausible's own port for the tracking script (an
+# always-200, unauthenticated path) from inside the network via the caddy
+# container's busybox wget. This blocks until migrations finish and the app is
+# actually serving — so a failed migration surfaces here, not as a silent
+# half-up stack. No extra collections needed.
+- name: Wait for Plausible to be serving (readiness gate)
+  ansible.builtin.command:
+    cmd: docker compose exec -T caddy wget -q -T 5 -O /dev/null http://plausible:8000/js/script.js
+  args:
+    chdir: "{{ project_dir }}"
+  register: plausible_ready
+  until: plausible_ready.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
