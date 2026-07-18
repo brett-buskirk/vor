@@ -30,10 +30,12 @@ focused PRs and maps to a milestone. Check items off as they ship._
 - [x] Finish `CUSTOMIZATION.md` with `brett-buskirk.dev` as the worked example.
 - [x] Final `ARCHITECTURE.md` component + trust-zone map; document every variable.
 
-## Phase 5 — CI & hardening
-- [ ] Green the full CI pipeline; wire Dependabot.
-- [ ] Backup path (`pg_dump` + ClickHouse → Spaces).
-- [ ] Security review of the firewall + Caddy split.
+## Phase 5 — CI & hardening ✅
+- [x] Green the full CI pipeline; wire Dependabot — added the `docker` ecosystem, pinned the shellcheck
+      action, and added a `caddy validate` job.
+- [x] Backup path — `scripts/backup.sh` (pg_dump + ClickHouse logical dumps) + [docs/BACKUP.md](docs/BACKUP.md).
+      Automated scheduling to Spaces is post-1.0.
+- [x] Security review of the firewall + Caddy split — [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Phase 6 — v1.0 & go-live
 - [ ] Deploy the real instance; point `analytics.brett-buskirk.dev` at it.
