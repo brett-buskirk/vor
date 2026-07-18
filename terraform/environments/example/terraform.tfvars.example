@@ -1,0 +1,52 @@
+# =============================================================================
+# Terraform Variables — Example Environment
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values.
+# NEVER commit terraform.tfvars — it contains secrets.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# DigitalOcean Authentication
+# -----------------------------------------------------------------------------
+# API token: https://cloud.digitalocean.com/account/api/tokens
+
+do_token = "dop_v1_your_api_token_here"
+
+# -----------------------------------------------------------------------------
+# Project
+# -----------------------------------------------------------------------------
+# Short identifier for this deployment — prefixes all resource names and tags
+# and derives the droplet name "<project_name>-analytics".
+# Use lowercase letters, numbers, and hyphens (e.g. "acme", "myco").
+
+project_name = "your-project-name"
+
+# -----------------------------------------------------------------------------
+# Infrastructure
+# -----------------------------------------------------------------------------
+
+region       = "nyc3"
+droplet_size = "s-2vcpu-4gb" # ClickHouse needs RAM — this is the minimum recommended
+
+# SSH key fingerprint(s) registered with DigitalOcean. From: doctl compute ssh-key list
+ssh_fingerprints = ["ab:cd:ef:00:11:22:33:44:55:66:77:88:99:aa:bb:cc"]
+
+# Block Storage volume size (GiB) for the Postgres + ClickHouse data dirs.
+volume_size_gb = 50
+
+# -----------------------------------------------------------------------------
+# Analytics
+# -----------------------------------------------------------------------------
+# Public hostname for Plausible. Point this DNS A record at the droplet's IP
+# (terraform output droplet_ip) before applying, so ACME can issue a cert.
+
+analytics_domain = "analytics.example.com"
+
+# -----------------------------------------------------------------------------
+# Security
+# -----------------------------------------------------------------------------
+# REQUIRED — restrict SSH to known IPs. Do NOT use 0.0.0.0/0.
+# The dashboard is reached over Tailscale, so this only needs your admin IP(s).
+
+ssh_allowed_ips = ["your.home.ip/32"]
+# ssh_allowed_ips = ["203.0.113.10/32", "198.51.100.0/24"]

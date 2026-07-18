@@ -1,0 +1,57 @@
+# =============================================================================
+# Common Role — Base System Configuration
+# =============================================================================
+# Generic host prep shared by every vor deployment. Mostly complete; the
+# TODO(vor) markers call out anything worth revisiting.
+# =============================================================================
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install essential packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - git
+      - vim
+      - htop
+      - unzip
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - python3-pip
+    state: present
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ timezone | default('America/New_York') }}"
+
+- name: Enable unattended security updates
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+
+- name: Configure automatic security updates
+  ansible.builtin.copy:
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+
+- name: Create project directory
+  ansible.builtin.file:
+    path: "{{ project_dir }}"
+    state: directory
+    mode: "0755"
+
+# TODO(vor): mount the attached Block Storage volume (terraform `volume` module)
+# and bind the Postgres + ClickHouse data dirs to it, so the databases live on
+# the persistent volume rather than the droplet's ephemeral disk. Something like:
+#   - detect /dev/disk/by-id/scsi-0DO_Volume_<name>
+#   - filesystem + mount at /mnt/{{ project_name }}-analytics-data
+#   - point the compose bind mounts there

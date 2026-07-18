@@ -1,0 +1,49 @@
+# =============================================================================
+# vor — Site Playbook
+# =============================================================================
+# Provisions the analytics droplet and brings up the Plausible stack.
+#
+# Roles run in order:
+#   common     — base packages, timezone, project directory
+#   security   — SSH hardening, fail2ban, UFW (80/443 public, dashboard is
+#                Tailscale-only so no dashboard port is opened)
+#   docker     — Docker Engine + Compose plugin
+#   tailscale  — install Tailscale + join the tailnet (admin dashboard surface)
+#   plausible  — template compose/env/Caddyfile/clickhouse config, compose up
+#
+# Usage:
+#   ansible-playbook -i inventory/manual.yml playbooks/site.yml \
+#     -e "tailscale_auth_key=tskey-auth-xxxx"
+# =============================================================================
+---
+- name: Deploy the vor Plausible Analytics stack
+  hosts: analytics
+  become: true
+
+  roles:
+    - common
+    - security
+    - docker
+    - tailscale
+    - plausible
+
+  post_tasks:
+    - name: Show access information
+      ansible.builtin.debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════
+          vor deploy complete — {{ project_name }}
+          ═══════════════════════════════════════════════════════════
+
+          Public ingestion : https://{{ analytics_domain }}/api/event
+          Tracking script  : https://{{ analytics_domain }}/js/script.js
+          Admin dashboard  : over Tailscale only (browse the droplet's
+                             tailnet hostname — NOT the public domain)
+
+          Next steps:
+          1. Confirm DNS for {{ analytics_domain }} points at this droplet.
+          2. Create the first user (registration is disabled by default):
+             docker compose -f {{ project_dir }}/docker-compose.yml exec \
+               plausible /entrypoint.sh db create_user ...   # TODO(vor): verify
+          3. Add a site in the dashboard and drop the snippet on it.
+          ═══════════════════════════════════════════════════════════

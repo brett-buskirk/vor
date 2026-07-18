@@ -1,0 +1,7 @@
+---
+- name: Restart plausible stack
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ project_dir }}"
+  register: plausible_restart
+  changed_when: "'Started' in plausible_restart.stdout or 'Recreated' in plausible_restart.stdout"

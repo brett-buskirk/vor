@@ -1,2 +1,42 @@
+# --- OS / editor noise ---
 .DS_Store
 *.log
+*.swp
+
+# --- Secrets & credentials — NEVER commit these ---
+# Only *.example variants are tracked.
+*.tfvars
+!*.tfvars.example
+.env
+.env.*
+!.env.example
+plausible-conf.env
+!plausible-conf.env.example
+*.pem
+*.key
+*.p12
+*_rsa
+*_ed25519
+tailscale-authkey*
+
+# --- Terraform ---
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+
+# --- Ansible ---
+# Real inventory is generated/secret; only the *.example is tracked.
+ansible/inventory/manual.yml
+ansible/inventory/*.retry
+*.retry
+
+# --- Runtime data / backups ---
+docker/plausible/clickhouse-data/
+docker/plausible/postgres-data/
+backups/
+*.dump
+*.sql.gz

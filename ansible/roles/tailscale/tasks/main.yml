@@ -1,0 +1,54 @@
+# =============================================================================
+# Tailscale Role — Join the tailnet (admin dashboard surface)
+# =============================================================================
+# The Plausible admin dashboard is bound to the Tailscale interface only, so
+# the droplet must be on the tailnet. Public event ingestion does NOT depend on
+# Tailscale — it rides the public 80/443 listeners.
+# =============================================================================
+---
+- name: Check if Tailscale is installed
+  ansible.builtin.command: tailscale version
+  register: tailscale_installed
+  ignore_errors: true
+  changed_when: false
+
+- name: Install Tailscale
+  when: tailscale_installed.rc != 0
+  block:
+    - name: Download the Tailscale install script
+      ansible.builtin.get_url:
+        url: https://tailscale.com/install.sh
+        dest: /tmp/tailscale-install.sh
+        mode: "0755"
+
+    - name: Run the Tailscale install script
+      ansible.builtin.command: /tmp/tailscale-install.sh
+      args:
+        creates: /usr/bin/tailscale
+
+    - name: Remove the install script
+      ansible.builtin.file:
+        path: /tmp/tailscale-install.sh
+        state: absent
+
+- name: Ensure tailscaled is running
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: started
+    enabled: true
+
+# TODO(vor): bring the node up on the tailnet. The auth key is a SECRET — pass
+# it via `-e tailscale_auth_key=...` or Ansible Vault, never commit it. Make
+# this idempotent (skip when already connected) and consider --ssh / tags.
+- name: Bring Tailscale up
+  ansible.builtin.command: >-
+    tailscale up
+    --authkey {{ tailscale_auth_key }}
+    {{ tailscale_up_args | default('') }}
+  when: tailscale_auth_key is defined and tailscale_auth_key | length > 0
+  register: tailscale_up
+  changed_when: "'Success' in tailscale_up.stdout | default('')"
+
+# TODO(vor): capture the node's Tailscale IPv4 (tailscale ip -4) and feed it to
+# the plausible role as `tailscale_ip`, so Caddy binds the dashboard listener
+# to the right interface. Placeholder in group_vars/all.yml for now.

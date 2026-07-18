@@ -1,0 +1,74 @@
+# =============================================================================
+# Plausible Role — Deploy the analytics stack
+# =============================================================================
+# Renders the Docker Compose stack (Plausible + Postgres + ClickHouse + Caddy)
+# and its config into {{ project_dir }} and brings it up. The Ansible templates
+# here are the source of truth; docker/plausible/* is the parallel manual path
+# and must stay consistent with them.
+#
+# TODO(vor): author the Jinja2 templates under roles/plausible/templates/
+# (docker-compose.yml.j2, Caddyfile.j2, clickhouse configs) — mirror the
+# checked-in files in docker/plausible/. The env file is templated from a
+# gitignored source / Vault, never from a committed secret.
+# =============================================================================
+---
+- name: Create the stack directory structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ project_dir }}"
+    - "{{ project_dir }}/clickhouse"
+
+- name: Template the Docker Compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ project_dir }}/docker-compose.yml"
+    mode: "0644"
+  notify: Restart plausible stack
+  # TODO(vor): create templates/docker-compose.yml.j2 (see docker/plausible/).
+
+- name: Template the Caddyfile (public ingestion + Tailscale dashboard split)
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ project_dir }}/Caddyfile"
+    mode: "0644"
+  notify: Restart plausible stack
+  # TODO(vor): create templates/Caddyfile.j2 (see docker/plausible/Caddyfile.example).
+
+- name: Template the ClickHouse config tweaks
+  ansible.builtin.template:
+    src: "clickhouse/{{ item }}.j2"
+    dest: "{{ project_dir }}/clickhouse/{{ item }}"
+    mode: "0644"
+  loop:
+    - logs.xml
+    - ipv4-only.xml
+  notify: Restart plausible stack
+  # TODO(vor): create templates/clickhouse/*.j2 (see docker/plausible/clickhouse/).
+
+- name: Install the Plausible env file (secrets — from a gitignored source / Vault)
+  ansible.builtin.copy:
+    src: "{{ plausible_env_file }}"
+    dest: "{{ project_dir }}/plausible-conf.env"
+    mode: "0600"
+  notify: Restart plausible stack
+  # TODO(vor): prefer templating this from Ansible Vault rather than copying a
+  # plaintext env file. Never commit the real file — only *.example.
+
+- name: Pull the stack images
+  ansible.builtin.command: docker compose pull
+  args:
+    chdir: "{{ project_dir }}"
+  changed_when: false
+
+- name: Bring the stack up
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ project_dir }}"
+  register: plausible_compose_up
+  changed_when: "'Started' in plausible_compose_up.stdout or 'Created' in plausible_compose_up.stdout"
+
+# TODO(vor): add a health gate — wait for https://{{ analytics_domain }}/api/health
+# (or the container healthchecks) before declaring success.

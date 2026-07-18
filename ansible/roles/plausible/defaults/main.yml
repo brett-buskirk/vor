@@ -1,0 +1,30 @@
+---
+# =============================================================================
+# Plausible Role — Defaults
+# =============================================================================
+# Role-scoped variables are prefixed `plausible_` (ansible-lint var-naming).
+# Override any of these from inventory/group_vars/all.yml, which uses the same
+# names so the group_vars value wins over these defaults.
+#
+# TODO(vor): pin/verify image versions against the upstream Community Edition:
+# https://github.com/plausible/community-edition — keep these in lockstep with
+# docker/plausible/docker-compose.yml and inventory/group_vars/all.yml.
+# =============================================================================
+
+# Container images
+plausible_image: "ghcr.io/plausible/community-edition:v3.2.1"
+plausible_postgres_image: "postgres:16-alpine"
+plausible_clickhouse_image: "clickhouse/clickhouse-server:24.12-alpine"
+plausible_caddy_image: "caddy:2-alpine"
+
+# Ports
+# Plausible listens on 8000 inside the Docker network; Caddy is the only
+# service that publishes host ports.
+plausible_internal_port: 8000
+plausible_caddy_http_port: 80
+plausible_caddy_https_port: 443
+# Dashboard listener (bound to the Tailscale interface — see the Caddyfile).
+plausible_caddy_dashboard_port: 443
+
+# Paths (project_dir is a global set in group_vars/all.yml)
+plausible_clickhouse_config_dir: "{{ project_dir }}/clickhouse"
