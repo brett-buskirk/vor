@@ -39,10 +39,6 @@
 {
 	# ACME contact for the public certificate (set via {$ACME_EMAIL} in compose).
 	email {$ACME_EMAIL}
-
-	# While testing, point ACME at Let's Encrypt staging to avoid burning the
-	# strict production rate limits, then remove this line for the real cert:
-	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
 
 # -----------------------------------------------------------------------------
@@ -51,6 +47,14 @@
 # Listens on the public 80/443 (bound to the droplet's public IP in compose).
 # Caddy auto-provisions a Let's Encrypt cert for {$ANALYTICS_DOMAIN}.
 {$ANALYTICS_DOMAIN} {
+	# While testing, point ACME at Let's Encrypt staging to avoid burning the
+	# strict production rate limits, then remove this block for the real cert.
+	# Keep it scoped to THIS site — a global acme_ca would create a default
+	# issuer policy that conflicts with the dashboard's `tls internal` below.
+	# tls {
+	# 	ca https://acme-staging-v02.api.letsencrypt.org/directory
+	# }
+
 	# Match ONLY the public surface: the tracking script and the event API.
 	# /js/*        — script.js and its extension variants (outbound-links, etc.)
 	# /api/event   — the ingestion endpoint every visitor's browser POSTs to

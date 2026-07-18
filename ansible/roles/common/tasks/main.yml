@@ -49,9 +49,39 @@
     state: directory
     mode: "0755"
 
-# TODO(vor): mount the attached Block Storage volume (terraform `volume` module)
-# and bind the Postgres + ClickHouse data dirs to it, so the databases live on
-# the persistent volume rather than the droplet's ephemeral disk. Something like:
-#   - detect /dev/disk/by-id/scsi-0DO_Volume_<name>
-#   - filesystem + mount at /mnt/{{ project_name }}-analytics-data
-#   - point the compose bind mounts there
+# ---------------------------------------------------------------------------
+# Block Storage volume — the durable home for analytics data
+# ---------------------------------------------------------------------------
+# The DigitalOcean Block Storage volume (terraform `volume` module) is attached
+# to the droplet and appears at a stable /dev/disk/by-id path derived from its
+# name. Terraform formats it ext4 at creation, so the filesystem task is a
+# no-op in the normal case and a backstop otherwise. We mount it at data_root
+# and create the per-service subdirs the compose stack bind-mounts. Analytics
+# history is the product, so the filesystem task NEVER reformats a volume that
+# already holds a filesystem (force defaults to false) — e.g. one reattached,
+# full of data, after a droplet rebuild.
+- name: Ensure a filesystem exists on the data volume (no-op if already formatted)
+  community.general.filesystem:
+    fstype: ext4
+    dev: "{{ data_volume_device }}"
+
+- name: Mount the data volume at the data root
+  ansible.posix.mount:
+    path: "{{ data_root }}"
+    src: "{{ data_volume_device }}"
+    fstype: ext4
+    opts: defaults,nofail,noatime
+    state: mounted
+
+- name: Create the per-service data subdirectories on the volume
+  ansible.builtin.file:
+    path: "{{ data_root }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - postgres
+    - clickhouse
+    - clickhouse-logs
+    - plausible
+    - caddy
+    - caddy-config

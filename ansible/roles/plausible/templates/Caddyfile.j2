@@ -1,0 +1,61 @@
+{{ ansible_managed | comment }}
+# =============================================================================
+# vor — Caddyfile  ·  RENDERED BY ANSIBLE  ·  the security centerpiece
+# =============================================================================
+# Two sites proxy the same Plausible app (plausible:8000) but expose very
+# different surfaces:
+#
+#   1. PUBLIC  — {{ analytics_domain }}, world-reachable on :80/:443 (bound to
+#                the droplet's public IP in docker-compose.yml). Serves ONLY the
+#                tracking script (/js/*) and the event API (/api/event);
+#                everything else 404s. TLS via Let's Encrypt.
+#
+#   2. DASHBOARD — the admin UI on :8443, which docker-compose.yml publishes ONLY
+#                on the droplet's Tailscale IP. Reachable solely over the tailnet.
+#
+# The public/private boundary is enforced twice over: here (Caddy only serves
+# /js/* + /api/event publicly) and in compose (the :8443 listener is published
+# only on the Tailscale IP, so the OS never routes public traffic to it).
+# =============================================================================
+
+{
+	# ACME contact for the public certificate.
+	email {{ caddy_acme_email }}
+}
+
+# -----------------------------------------------------------------------------
+# 1) PUBLIC ingestion site — only /js/* and /api/event are exposed
+# -----------------------------------------------------------------------------
+{{ analytics_domain }} {
+{% if caddy_acme_staging | default(false) %}
+	# Staging CA (set caddy_acme_staging: true) — avoids burning prod rate limits.
+	# Scoped to THIS site on purpose: a global acme_ca would create a default
+	# issuer policy that conflicts with the dashboard's `tls internal`.
+	tls {
+		ca https://acme-staging-v02.api.letsencrypt.org/directory
+	}
+{% endif %}
+	# The only public surface: the tracking script and the event API.
+	@public path /js/* /api/event /api/event/
+
+	handle @public {
+		reverse_proxy plausible:8000
+	}
+
+	# Everything else — dashboard, login, settings, stats API — is refused so it
+	# can never be reached from the public internet. 404 (not 403) gives nothing
+	# away about what else runs here.
+	handle {
+		respond "Not found" 404
+	}
+}
+
+# -----------------------------------------------------------------------------
+# 2) ADMIN dashboard site — Tailscale-only, the full app
+# -----------------------------------------------------------------------------
+# compose publishes :8443 only on the droplet's Tailscale IP. TLS uses Caddy's
+# internal CA (this listener has no publicly resolvable hostname).
+:8443 {
+	tls internal
+	reverse_proxy plausible:8000
+}

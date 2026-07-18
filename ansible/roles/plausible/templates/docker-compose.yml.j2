@@ -1,0 +1,127 @@
+{{ ansible_managed | comment }}
+# =============================================================================
+# vor — Plausible Analytics Stack (Docker Compose)  ·  RENDERED BY ANSIBLE
+# =============================================================================
+# This file is templated by the `plausible` role and is the source of truth for
+# production. docker/plausible/docker-compose.yml is the parallel manual path and
+# must stay consistent with this template.
+#
+# ── THE DEFINING SPLIT ──────────────────────────────────────────────────────
+# Caddy serves PUBLICLY (80/443, from anywhere) ONLY the tracking script /js/*
+# and the event API /api/event. The admin DASHBOARD is published solely on the
+# droplet's Tailscale IP. Postgres (5432) and ClickHouse (8123/9000) are never
+# published — they stay on the internal Docker network. See ./Caddyfile.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — accounts, site configuration, metadata
+  # ---------------------------------------------------------------------------
+  plausible_db:
+    image: {{ plausible_postgres_image }}
+    container_name: {{ project_name }}_plausible_db
+    restart: always
+    volumes:
+      # DB data on the attached Block Storage volume so it survives a rebuild.
+      - {{ data_root }}/postgres:/var/lib/postgresql/data
+    # POSTGRES_PASSWORD is read from the shared secret env file (same file the
+    # app uses), so it can never drift from the password inside DATABASE_URL.
+    env_file:
+      - plausible-conf.env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      start_period: 1m
+    networks:
+      - vor
+
+  # ---------------------------------------------------------------------------
+  # ClickHouse — the analytics events store
+  # ---------------------------------------------------------------------------
+  plausible_events_db:
+    image: {{ plausible_clickhouse_image }}
+    container_name: {{ project_name }}_plausible_events_db
+    restart: always
+    volumes:
+      - {{ data_root }}/clickhouse:/var/lib/clickhouse
+      - {{ data_root }}/clickhouse-logs:/var/log/clickhouse-server
+      # logs.xml + ipv4-only.xml apply everywhere; low-resources.xml + the
+      # users.d override tune ClickHouse for the small default node.
+      - ./clickhouse/logs.xml:/etc/clickhouse-server/config.d/logs.xml:ro
+      - ./clickhouse/ipv4-only.xml:/etc/clickhouse-server/config.d/ipv4-only.xml:ro
+      - ./clickhouse/low-resources.xml:/etc/clickhouse-server/config.d/low-resources.xml:ro
+      - ./clickhouse/default-profile-low-resources-overrides.xml:/etc/clickhouse-server/users.d/default-profile-low-resources-overrides.xml:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 -O - http://127.0.0.1:8123/ping || exit 1"]
+      start_period: 1m
+    networks:
+      - vor
+
+  # ---------------------------------------------------------------------------
+  # Plausible — the application (listens :8000 internally, never published)
+  # ---------------------------------------------------------------------------
+  plausible:
+    image: {{ plausible_image }}
+    container_name: {{ project_name }}_plausible
+    restart: always
+    command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
+    depends_on:
+      plausible_db:
+        condition: service_healthy
+      plausible_events_db:
+        condition: service_healthy
+    env_file:
+      - plausible-conf.env
+    volumes:
+      - {{ data_root }}/plausible:/var/lib/plausible
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    networks:
+      - vor
+
+  # ---------------------------------------------------------------------------
+  # Caddy — reverse proxy + TLS, the only service that publishes host ports
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: {{ plausible_caddy_image }}
+    container_name: {{ project_name }}_caddy
+    restart: always
+    depends_on:
+      - plausible
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # ACME certs/keys on the durable volume, so a rebuild reuses the cert.
+      - {{ data_root }}/caddy:/data
+      - {{ data_root }}/caddy-config:/config
+    ports:
+      # PUBLIC ingestion + ACME TLS — bound to the droplet's PUBLIC IP only.
+      - "{{ public_ip }}:80:80"
+      - "{{ public_ip }}:443:443"
+      # ADMIN dashboard — bound to the TAILSCALE IP only, never the public IP.
+      # Caddy serves the dashboard on :8443; publishing it solely on the tailnet
+      # address keeps it off the public internet.
+      - "{{ tailscale_ip }}:443:8443"
+    networks:
+      - vor
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  vor:
+    driver: bridge
+
+# =============================================================================
+# Data durability
+# =============================================================================
+# Every stateful path is bind-mounted under {{ data_root }} — the mount point of
+# the attached DigitalOcean Block Storage volume. The droplet can be rebuilt and
+# the volume reattached with zero data loss. The subdirectories are created by
+# the `common` role when it mounts the volume.

@@ -49,6 +49,22 @@
   register: tailscale_up
   changed_when: "'Success' in tailscale_up.stdout | default('')"
 
-# TODO(vor): capture the node's Tailscale IPv4 (tailscale ip -4) and feed it to
-# the plausible role as `tailscale_ip`, so Caddy binds the dashboard listener
-# to the right interface. Placeholder in group_vars/all.yml for now.
+# Capture the node's Tailscale IPv4 and hand it to the plausible role as
+# `tailscale_ip`, so Caddy binds the dashboard listener to the tailnet interface.
+# Retries briefly because the address can take a moment to be assigned after
+# `tailscale up`. If the node never joined (no auth key), this stays empty and
+# the placeholder in group_vars stands — compose will then fail loudly to bind
+# the dashboard, which is the correct signal that Tailscale must be joined first.
+- name: Capture the node's Tailscale IPv4
+  ansible.builtin.command: tailscale ip -4
+  register: tailscale_ip_result
+  changed_when: false
+  failed_when: false
+  retries: 6
+  delay: 5
+  until: tailscale_ip_result.rc == 0 and (tailscale_ip_result.stdout | trim | length > 0)
+
+- name: Set tailscale_ip fact for Caddy's dashboard listener
+  ansible.builtin.set_fact:
+    tailscale_ip: "{{ tailscale_ip_result.stdout_lines[0] | trim }}"
+  when: tailscale_ip_result.rc == 0 and (tailscale_ip_result.stdout | trim | length > 0)

@@ -1,0 +1,10 @@
+<!--
+  vor — ClickHouse low-resources tuning  ·  RENDERED BY ANSIBLE
+  Mounted at /etc/clickhouse-server/config.d/low-resources.xml. Caps the mark
+  cache so ClickHouse behaves on the small default node (s-2vcpu-4gb).
+  Verbatim from plausible/community-edition, verified 2026-07.
+-->
+<clickhouse>
+    <!-- https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#mark_cache_size -->
+    <mark_cache_size>524288000</mark_cache_size>
+</clickhouse>
