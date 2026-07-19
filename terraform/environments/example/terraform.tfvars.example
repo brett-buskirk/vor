@@ -37,8 +37,11 @@ volume_size_gb = 50
 # -----------------------------------------------------------------------------
 # Analytics
 # -----------------------------------------------------------------------------
-# Public hostname for Plausible. Point this DNS A record at the droplet's IP
-# (terraform output droplet_ip) before applying, so ACME can issue a cert.
+# Public hostname for Plausible. Set it here now — but the droplet doesn't exist
+# yet, so create its DNS A record AFTER `terraform apply`: point analytics_domain
+# at the `droplet_ip` output. DNS must resolve before you run Ansible (that's when
+# Caddy asks Let's Encrypt for the cert) — not before `terraform apply`, which
+# never touches DNS.
 
 analytics_domain = "analytics.example.com"
 

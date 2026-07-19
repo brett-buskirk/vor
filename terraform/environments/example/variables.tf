@@ -58,7 +58,7 @@ variable "volume_size_gb" {
 # -----------------------------------------------------------------------------
 
 variable "analytics_domain" {
-  description = "Public hostname for the Plausible instance (e.g. 'analytics.example.com'). Becomes Plausible's BASE_URL and the ACME-managed TLS host for the public ingestion endpoint. Point this DNS record at the droplet before applying."
+  description = "Public hostname for the Plausible instance (e.g. 'analytics.example.com'). Becomes Plausible's BASE_URL and the ACME-managed TLS host for the public ingestion endpoint. Set it before `terraform apply`; then create its DNS A record pointing at the droplet_ip output. DNS must resolve before the Ansible/Caddy step (when ACME issues the cert), not before terraform apply."
   type        = string
 }
 
