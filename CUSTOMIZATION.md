@@ -124,19 +124,26 @@ ansible-playbook -i ansible/inventory/manual.yml ansible/playbooks/site.yml \
 
 ## Step 4 — Join the tailnet and reach the dashboard
 
-Tailscale is a mesh, so the device you browse from needs it too:
+The dashboard is reached over your tailnet, with a real HTTPS cert, via **Tailscale Serve**. Full detail
+(and *why* — the CSRF/cookie/LiveView constraints that rule out the simpler options) is in
+**[docs/DASHBOARD-ACCESS.md](docs/DASHBOARD-ACCESS.md)**. The short version:
 
-- Install the Tailscale client on your machine and `tailscale up` (WSL2 users: install the **Windows**
-  client — the tailnet lives on the host).
-- Find the droplet on the tailnet: `tailscale status`.
-- Open the Plausible dashboard at the droplet's **Tailscale** hostname/IP.
+1. **Enable HTTPS certs for your tailnet** (once): Tailscale admin console → **DNS** → enable **MagicDNS**
+   and **HTTPS Certificates**.
+2. **The playbook already ran `tailscale serve`** for you (the `plausible` role). Confirm the dashboard URL
+   from the droplet: `tailscale serve status` → e.g. `https://vor-analytics.<your-tailnet>.ts.net/`.
+3. **Put the device you browse from on the tailnet** too (Tailscale is a mesh — WSL2 users install the
+   **Windows** client). Then open that `https://<droplet>.<tailnet>.ts.net/` URL. Real cert, no warning.
 
-Confirm the split works as designed:
+> **Turn off any full-tunnel VPN (e.g. NordVPN) when using the tailnet.** It hijacks the Tailscale IP range
+> and will make both the dashboard and Tailscale SSH unreachable. See docs/DASHBOARD-ACCESS.md.
+
+Confirm the public/private split works as designed:
 
 ```bash
 curl -I https://analytics.brett-buskirk.dev/js/script.js   # public: 200
 curl -I https://<droplet-public-ip>/login                  # public dashboard: should FAIL / 404
-# the dashboard should only respond over the tailnet
+# the dashboard responds only over the tailnet URL above
 ```
 
 ---
@@ -149,7 +156,7 @@ Tailscale**, never on the public internet:
 
 1. In `docker/plausible/plausible-conf.env`, set `DISABLE_REGISTRATION=false`.
 2. Re-run the playbook — it copies the changed env up and recreates the Plausible container.
-3. Open the dashboard over Tailscale and register your admin account at `/register`.
+3. Open the dashboard at its tailnet URL (Step 4) and register your admin account at `/register`.
 4. Set `DISABLE_REGISTRATION=invite_only` (lets you invite teammates later) or `true` (fully closed), and
    re-run the playbook once more. Registration is now locked again.
 

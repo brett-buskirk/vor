@@ -68,10 +68,10 @@ caddy_acme_email: "admin@example.com"
 # inventory where ansible_host is not the public IP.
 public_ip: "{{ ansible_host }}"
 
-# The droplet's TAILSCALE IP that Caddy's dashboard listener binds to. Fallback
-# only — the plausible role captures the real address (tailscale ip -4) and
-# overrides this via set_fact once the node has joined the tailnet.
-tailscale_ip: "100.100.100.100"
+# NOTE: the dashboard is NOT bound to a Tailscale IP anymore. Caddy serves it on
+# loopback (127.0.0.1:8443) and `tailscale serve` fronts it with real HTTPS over
+# the tailnet (see the plausible role + docs/DASHBOARD-ACCESS.md), so no
+# tailscale_ip variable is needed.
 
 # -----------------------------------------------------------------------------
 # Tailscale — admin dashboard surface (consumed by brett-buskirk.baseline)

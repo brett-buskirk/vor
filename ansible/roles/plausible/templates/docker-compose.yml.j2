@@ -119,10 +119,11 @@ services:
       # PUBLIC ingestion + ACME TLS — bound to the droplet's PUBLIC IP only.
       - "{{ public_ip }}:80:80"
       - "{{ public_ip }}:443:443"
-      # ADMIN dashboard — bound to the TAILSCALE IP only, never the public IP.
-      # Caddy serves the dashboard on :8443; publishing it solely on the tailnet
-      # address keeps it off the public internet.
-      - "{{ tailscale_ip }}:443:8443"
+      # ADMIN dashboard — plain HTTP on :8443, published on LOOPBACK only.
+      # `tailscale serve` (configured by this role) terminates real HTTPS on the
+      # droplet's MagicDNS name and forwards here, keeping the dashboard
+      # tailnet-only. See docs/DASHBOARD-ACCESS.md.
+      - "127.0.0.1:8443:8443"
     networks:
       - vor
 

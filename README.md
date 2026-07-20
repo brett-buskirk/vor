@@ -150,6 +150,7 @@ never published off the internal Docker network. See [SECURITY.md](SECURITY.md).
 |---|---|
 | [CUSTOMIZATION.md](CUSTOMIZATION.md) | Step-by-step deployment guide + teardown runbook |
 | [docs/ADDING-A-SITE.md](docs/ADDING-A-SITE.md) | Add a tracked property (no infra change) |
+| [docs/DASHBOARD-ACCESS.md](docs/DASHBOARD-ACCESS.md) | Reaching the admin dashboard over Tailscale (Serve + real HTTPS) |
 | [docs/BACKUP.md](docs/BACKUP.md) | Backup & restore — volume snapshots + logical dumps |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Component map, trust zones, design decisions |
 | [docs/ABOUT.md](docs/ABOUT.md) | Plain-language overview — no jargon |

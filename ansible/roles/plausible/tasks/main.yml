@@ -13,31 +13,12 @@
 # Prerequisites: the `common` role mounted the Block Storage volume at
 # {{ data_root }}, and brett-buskirk.baseline installed Docker + joined the
 # tailnet just before this role runs.
+#
+# The admin dashboard is served over the tailnet by `tailscale serve` (the last
+# task), which fronts Caddy's loopback :8443 with a real HTTPS cert on the
+# droplet's MagicDNS name — no Tailscale IP needs to be captured or templated.
 # =============================================================================
 ---
-# Caddy binds the dashboard listener to the node's Tailscale IP, so capture it
-# here (baseline has already run `tailscale up`). Retries briefly because the
-# address can take a moment to be assigned. If the node never joined (no auth
-# key), this stays empty and the group_vars fallback stands — docker compose
-# then fails loudly to bind the dashboard, which is the correct signal.
-#
-# noqa var-naming[no-role-prefix]: tailscale_ip is a shared var (its group_vars
-# fallback and the compose template both use it, like public_ip / data_root),
-# not plausible-internal state, so it intentionally has no plausible_ prefix.
-- name: Capture the node's Tailscale IPv4 # noqa: var-naming[no-role-prefix]
-  ansible.builtin.command: tailscale ip -4
-  register: tailscale_ip_result
-  changed_when: false
-  failed_when: false
-  retries: 6
-  delay: 5
-  until: tailscale_ip_result.rc == 0 and (tailscale_ip_result.stdout | trim | length > 0)
-
-- name: Set tailscale_ip fact for Caddy's dashboard listener # noqa: var-naming[no-role-prefix]
-  ansible.builtin.set_fact:
-    tailscale_ip: "{{ tailscale_ip_result.stdout_lines[0] | trim }}"
-  when: tailscale_ip_result.rc == 0 and (tailscale_ip_result.stdout | trim | length > 0)
-
 - name: Create the stack directory structure
   ansible.builtin.file:
     path: "{{ item }}"
@@ -110,3 +91,23 @@
   retries: 30
   delay: 10
   changed_when: false
+
+# Expose the dashboard over the tailnet with a real (trusted) HTTPS cert. Caddy
+# serves the dashboard as plain HTTP on 127.0.0.1:8443 (loopback only); Tailscale
+# Serve terminates HTTPS on the droplet's MagicDNS name and forwards to it. This
+# is the only way Plausible's login works over the tailnet — a bare-IP internal
+# cert can't be issued and plain HTTP fails CSRF/cookie/LiveView. Requires HTTPS
+# certificates enabled for the tailnet (Tailscale admin → DNS). Idempotent: the
+# serve config is compared and only re-applied when it differs.
+# See docs/DASHBOARD-ACCESS.md.
+- name: Check the current Tailscale Serve config
+  ansible.builtin.command: tailscale serve status
+  register: plausible_serve_status
+  changed_when: false
+  failed_when: false
+
+- name: Expose the dashboard via Tailscale Serve (real HTTPS over the tailnet)
+  ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:8443
+  when: "'127.0.0.1:8443' not in (plausible_serve_status.stdout | default(''))"
+  register: plausible_serve
+  changed_when: plausible_serve.rc == 0

@@ -10,12 +10,16 @@
 #                tracking script (/js/*) and the event API (/api/event);
 #                everything else 404s. TLS via Let's Encrypt.
 #
-#   2. DASHBOARD — the admin UI on :8443, which docker-compose.yml publishes ONLY
-#                on the droplet's Tailscale IP. Reachable solely over the tailnet.
+#   2. DASHBOARD — the admin UI. Caddy serves it as plain HTTP on :8443, which
+#                docker-compose.yml publishes on 127.0.0.1 ONLY. `tailscale serve`
+#                fronts it with a real HTTPS cert (the droplet's MagicDNS name)
+#                over the tailnet. The header rewrites below make Plausible accept
+#                the request (Host/Origin/scheme match its BASE_URL) so CSRF, the
+#                session cookie, and LiveView all pass. See docs/DASHBOARD-ACCESS.md.
 #
 # The public/private boundary is enforced twice over: here (Caddy only serves
-# /js/* + /api/event publicly) and in compose (the :8443 listener is published
-# only on the Tailscale IP, so the OS never routes public traffic to it).
+# /js/* + /api/event publicly) and in compose (the :8443 dashboard listener is
+# published on loopback only, so the OS never routes public traffic to it).
 # =============================================================================
 
 {
@@ -51,11 +55,16 @@
 }
 
 # -----------------------------------------------------------------------------
-# 2) ADMIN dashboard site — Tailscale-only, the full app
+# 2) ADMIN dashboard site — plain HTTP on :8443, fronted by Tailscale Serve
 # -----------------------------------------------------------------------------
-# compose publishes :8443 only on the droplet's Tailscale IP. TLS uses Caddy's
-# internal CA (this listener has no publicly resolvable hostname).
-:8443 {
-	tls internal
-	reverse_proxy plausible:8000
+# compose publishes :8443 on 127.0.0.1 only; `tailscale serve --bg --https=443
+# http://127.0.0.1:8443` terminates real HTTPS over the tailnet and forwards
+# here. The header rewrites make Plausible (BASE_URL = the public https domain)
+# accept the tailnet request, so login/LiveView work. See docs/DASHBOARD-ACCESS.md.
+http://:8443 {
+	reverse_proxy plausible:8000 {
+		header_up Host {{ analytics_domain }}
+		header_up X-Forwarded-Proto https
+		header_up Origin https://{{ analytics_domain }}
+	}
 }

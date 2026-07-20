@@ -37,7 +37,7 @@ else is not.
 |---|---|---|
 | `:443` `/js/*`, `/api/event` | Public | Caddy serves only these two path groups; all else 404s |
 | `:80` | Public | ACME challenge + redirect to `:443` only |
-| `:443` dashboard (`:8443` internally) | Tailnet only | Published solely on the Tailscale IP in Compose |
+| dashboard (`:8443` internally) | Tailnet only | Published on `127.0.0.1` only; Tailscale Serve fronts it over the tailnet |
 | `:22` SSH | `ssh_allowed_ips` only | Cloud Firewall allow-list; key-only auth; fail2ban |
 | Postgres `:5432`, ClickHouse `:8123/:9000` | None | No published ports; internal Docker network only |
 
@@ -55,14 +55,15 @@ Enforced in **two independent layers**, either of which alone would keep the das
 
 1. **Path rules (Caddy).** The public site (`{$ANALYTICS_DOMAIN}`) matches only `/js/*` and `/api/event`
    and returns `404` for everything else. The dashboard lives on a separate `:8443` listener.
-2. **Interface binding (Compose).** The public listener is published on the droplet's **public IP**; the
-   `:8443` dashboard listener is published **only on the Tailscale IP**. The OS never routes public
-   traffic to `:8443` at all — so even a Caddyfile mistake in layer 1 would not expose the dashboard
-   publicly, and vice-versa.
+2. **Loopback binding + Tailscale Serve (Compose).** The public listener is published on the droplet's
+   **public IP**; the `:8443` dashboard listener is published **only on `127.0.0.1`**, so it is not
+   reachable off-host at all. Tailscale Serve terminates HTTPS on the tailnet and forwards to that loopback
+   port — so the dashboard is reachable only by tailnet devices, and even a Caddyfile mistake in layer 1
+   could not expose it publicly (nothing binds it to the public interface). See `docs/DASHBOARD-ACCESS.md`.
 
 The Caddyfile is validated in CI (`caddy validate`), so a broken split fails the build. **Assessment:
-sound; defense in depth.** The residual is operator error on the two IP bindings — mitigated by the
-runtime proof in §6.
+sound; defense in depth.** Residual: the dashboard's exposure now depends on the Tailscale Serve config and
+a well-governed tailnet (see R2) — mitigated by the runtime proof in §6.
 
 ### 4.3 Data-store isolation
 Postgres and ClickHouse declare no `ports:` — they are reachable only on the internal `vor` Docker network
