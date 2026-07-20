@@ -38,6 +38,9 @@ override.tf.json
 ansible/inventory/manual.yml
 ansible/inventory/*.retry
 *.retry
+# Vendored Galaxy roles (installed via `ansible-galaxy install -r
+# ansible/requirements.yml`) — pulled on demand, never committed.
+ansible/roles/brett-buskirk.*
 
 # --- Runtime data / backups ---
 docker/plausible/clickhouse-data/

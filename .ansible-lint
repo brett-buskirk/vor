@@ -1,0 +1,10 @@
+# =============================================================================
+# ansible-lint configuration for vor
+# =============================================================================
+# Vendored Galaxy roles (installed by `ansible-galaxy install -r
+# ansible/requirements.yml`) live under ansible/roles/ but are NOT vor's code —
+# they're brett-buskirk.baseline + secure_user, linted in their own repos. They
+# are still resolved for site.yml; they're just not linted here.
+exclude_paths:
+  - ansible/roles/brett-buskirk.baseline/
+  - ansible/roles/brett-buskirk.secure_user/

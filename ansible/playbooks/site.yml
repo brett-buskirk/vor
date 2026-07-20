@@ -4,14 +4,20 @@
 # Provisions the analytics droplet and brings up the Plausible stack.
 #
 # Roles run in order:
-#   common     — base packages, timezone, project directory
-#   security   — SSH hardening, fail2ban, UFW (80/443 public, dashboard is
-#                Tailscale-only so no dashboard port is opened)
-#   docker     — Docker Engine + Compose plugin
-#   tailscale  — install Tailscale + join the tailnet (admin dashboard surface)
-#   plausible  — template compose/env/Caddyfile/clickhouse config, compose up
+#   common                  — base packages, timezone, project dir, and the
+#                             Block Storage volume mount (data_root)
+#   brett-buskirk.baseline  — host baseline: a sudo user (via its secure_user
+#                             dependency), SSH hardening, UFW (80/443 + SSH),
+#                             fail2ban, Docker + Compose, and Tailscale. Install
+#                             it first: ansible-galaxy install -r ansible/requirements.yml
+#   plausible               — capture the Tailscale IP, template the stack, up
+#
+# vor keeps root SSH for now (baseline_disable_root_login: false), so the deploy
+# connects as root throughout. secure_user still creates the sudo user; flipping
+# to non-root is a later hardening step.
 #
 # Usage:
+#   ansible-galaxy install -r ansible/requirements.yml
 #   ansible-playbook -i inventory/manual.yml playbooks/site.yml \
 #     -e "tailscale_auth_key=tskey-auth-xxxx"
 # =============================================================================
@@ -22,9 +28,25 @@
 
   roles:
     - common
-    - security
-    - docker
-    - tailscale
+
+    - role: brett-buskirk.baseline
+      vars:
+        # Keep root SSH for now — the deploy connects as root (see header).
+        baseline_disable_root_login: false
+        # vor's public port model: world-open 80/443 for ingestion + ACME.
+        # SSH (OpenSSH profile) is allowed by the role's default. Postgres /
+        # ClickHouse are never opened — they stay on the internal Docker network.
+        baseline_ufw_allow_ports:
+          - "80/tcp"
+          - "443/tcp"
+        # Let the sudo user drive Docker without sudo.
+        baseline_docker_users:
+          - "{{ user_name }}"
+        # Join the tailnet — the admin dashboard's surface. The key is a secret
+        # passed at runtime (-e tailscale_auth_key=...), never committed.
+        baseline_tailscale_authkey: "{{ tailscale_auth_key | default('') }}"
+        baseline_tailscale_up_args: "{{ tailscale_up_args | default('--ssh') }}"
+
     - plausible
 
   post_tasks:

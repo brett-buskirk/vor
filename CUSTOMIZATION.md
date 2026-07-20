@@ -103,16 +103,18 @@ cp ansible/inventory/manual.yml.example ansible/inventory/manual.yml
 # Set ansible_host to the droplet's public IP (terraform output droplet_ip)
 ```
 
-**d. Run the playbook** — it hardens the host, installs Docker + Tailscale (joining the tailnet with your
-auth key), and brings up the stack:
+**d. Install the Ansible dependencies, then run the playbook.** The playbook builds on the
+`brett-buskirk.baseline` role (installed from Galaxy) — it creates a `deploy` sudo user, hardens the host,
+installs Docker + Tailscale (joining the tailnet with your auth key), and brings up the stack:
 
 ```bash
+ansible-galaxy install -r ansible/requirements.yml
 ansible-playbook -i ansible/inventory/manual.yml ansible/playbooks/site.yml \
   -e "tailscale_auth_key=tskey-auth-xxxx"
 ```
 
 `plausible-conf.env` and `manual.yml` are gitignored; the Tailscale auth key is a secret passed at runtime
-— never commit it.
+— never commit it. (The deploy still connects as root; the `deploy` user is created for later hardening.)
 
 > **Tip — dodge Let's Encrypt rate limits while testing.** Set `caddy_acme_staging: true` in
 > `group_vars/all.yml` for your first runs so Caddy uses the ACME *staging* CA (untrusted certs, but no

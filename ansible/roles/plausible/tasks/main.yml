@@ -10,10 +10,34 @@
 # copied from a gitignored source (filled from plausible-conf.env.example),
 # never from a committed secret.
 #
-# Prerequisite: the `common` role has mounted the Block Storage volume at
-# {{ data_root }} and created its data subdirectories.
+# Prerequisites: the `common` role mounted the Block Storage volume at
+# {{ data_root }}, and brett-buskirk.baseline installed Docker + joined the
+# tailnet just before this role runs.
 # =============================================================================
 ---
+# Caddy binds the dashboard listener to the node's Tailscale IP, so capture it
+# here (baseline has already run `tailscale up`). Retries briefly because the
+# address can take a moment to be assigned. If the node never joined (no auth
+# key), this stays empty and the group_vars fallback stands — docker compose
+# then fails loudly to bind the dashboard, which is the correct signal.
+#
+# noqa var-naming[no-role-prefix]: tailscale_ip is a shared var (its group_vars
+# fallback and the compose template both use it, like public_ip / data_root),
+# not plausible-internal state, so it intentionally has no plausible_ prefix.
+- name: Capture the node's Tailscale IPv4 # noqa: var-naming[no-role-prefix]
+  ansible.builtin.command: tailscale ip -4
+  register: tailscale_ip_result
+  changed_when: false
+  failed_when: false
+  retries: 6
+  delay: 5
+  until: tailscale_ip_result.rc == 0 and (tailscale_ip_result.stdout | trim | length > 0)
+
+- name: Set tailscale_ip fact for Caddy's dashboard listener # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    tailscale_ip: "{{ tailscale_ip_result.stdout_lines[0] | trim }}"
+  when: tailscale_ip_result.rc == 0 and (tailscale_ip_result.stdout | trim | length > 0)
+
 - name: Create the stack directory structure
   ansible.builtin.file:
     path: "{{ item }}"
