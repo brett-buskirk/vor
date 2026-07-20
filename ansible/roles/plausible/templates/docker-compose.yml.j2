@@ -89,7 +89,10 @@ services:
     env_file:
       - plausible-conf.env
     volumes:
-      - {{ data_root }}/plausible:/var/lib/plausible
+      # Named volume, NOT a bind mount: the Plausible container runs non-root and
+      # can't write to a root-owned bind dir (tzdata init crashes the app). This
+      # is regenerable app state, not analytics data — the DBs stay on data_root.
+      - plausible-data:/var/lib/plausible
     ulimits:
       nofile:
         soft: 65535
@@ -133,7 +136,13 @@ networks:
 # =============================================================================
 # Data durability
 # =============================================================================
-# Every stateful path is bind-mounted under {{ data_root }} — the mount point of
-# the attached DigitalOcean Block Storage volume. The droplet can be rebuilt and
-# the volume reattached with zero data loss. The subdirectories are created by
-# the `common` role when it mounts the volume.
+# The databases + Caddy certs are bind-mounted under {{ data_root }} — the mount
+# point of the attached DigitalOcean Block Storage volume — so the droplet can be
+# rebuilt and the volume reattached with zero data loss. The subdirectories are
+# created by the `common` role when it mounts the volume.
+#
+# Plausible's own state (/var/lib/plausible) is a named volume instead: the app
+# runs non-root and can't write a root-owned bind dir. It's regenerable app
+# state, not analytics data.
+volumes:
+  plausible-data:
