@@ -117,7 +117,12 @@ services:
     env_file:
       - plausible-conf.env
     volumes:
-      - ${DATA_ROOT:-/mnt/vor-analytics-data}/plausible:/var/lib/plausible
+      # NOT bind-mounted: the Plausible container runs as a NON-root user and
+      # can't write to a root-owned bind-mount dir (its tzdata init crashes the
+      # app — "enoent .../tzdata_data/release_ets"). A named volume inherits the
+      # image's ownership, so Plausible can write. This is app state (tz cache,
+      # tmp), not analytics data — the DBs (the product) stay on DATA_ROOT below.
+      - plausible-data:/var/lib/plausible
     ulimits:
       nofile:
         soft: 65535
@@ -171,18 +176,22 @@ networks:
 # =============================================================================
 # Data durability
 # =============================================================================
-# vor deliberately does NOT use Docker named volumes for state. Every stateful
-# path is bind-mounted under DATA_ROOT, which points at the attached DigitalOcean
-# Block Storage volume — Ansible mounts it at /mnt/<project_name>-analytics-data;
-# the manual default here (/mnt/vor-analytics-data) matches the repo example.
-#
-# Because the databases, Plausible's state, and Caddy's ACME certs all live on
-# that volume, the droplet can be rebuilt and the volume reattached with ZERO
-# data loss — analytics history is the product. Named volumes on the droplet's
-# own disk would not survive a rebuild, which is exactly what we want to avoid.
+# The DATA (the product) is bind-mounted under DATA_ROOT, the attached
+# DigitalOcean Block Storage volume — Ansible mounts it at
+# /mnt/<project_name>-analytics-data; the manual default here
+# (/mnt/vor-analytics-data) matches the repo example. Postgres, ClickHouse (+ its
+# logs), and Caddy's ACME certs all live there, so the droplet can be rebuilt and
+# the volume reattached with ZERO data loss — analytics history is irreplaceable.
 #
 #   export DATA_ROOT=/mnt/<project_name>-analytics-data   # before docker compose up
 #
-# The subdirectories (postgres/, clickhouse/, clickhouse-logs/, plausible/,
-# caddy/, caddy-config/) are created by the Ansible common role (or scripts/
-# deploy.sh); Docker also auto-creates any missing bind-mount source dir on `up`.
+# The subdirectories (postgres/, clickhouse/, clickhouse-logs/, caddy/,
+# caddy-config/) are created by the Ansible common role (or scripts/deploy.sh);
+# Docker also auto-creates any missing bind-mount source dir on `up`.
+#
+# Plausible's OWN state (/var/lib/plausible) is the one exception: it's a named
+# volume, not a bind mount, because the app runs non-root and can't write to a
+# root-owned bind dir (see the plausible service above). It's regenerable app
+# state — not analytics data — so it doesn't need to live on the block volume.
+volumes:
+  plausible-data:
