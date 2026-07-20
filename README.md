@@ -112,8 +112,8 @@ cp terraform/environments/example/terraform.tfvars.example \
 # 1. Provision infrastructure
 cd terraform/environments/example && terraform init && terraform apply
 
-# 2. Set project_name + analytics_domain in ansible/inventory/group_vars/all.yml,
-#    fill docker/plausible/plausible-conf.env, point the inventory at the droplet, then:
+# 2. cp the group-vars + env templates to their real (gitignored) names, set
+#    project_name + analytics_domain, fill the secrets, point the inventory, then:
 ansible-galaxy install -r ansible/requirements.yml
 ansible-playbook -i ansible/inventory/manual.yml ansible/playbooks/site.yml \
   -e "tailscale_auth_key=tskey-auth-xxxx"

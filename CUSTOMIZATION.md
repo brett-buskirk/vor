@@ -68,8 +68,12 @@ Note the outputs (the droplet's public IP especially). Then **create/point the D
 
 ## Step 3 — Configure the analytics stack
 
-**a. Match the Ansible variables to your Terraform config.** Edit
-`ansible/inventory/group_vars/all.yml`:
+**a. Match the Ansible variables to your Terraform config.** Copy the group-vars
+template (the real `all.yml` is gitignored — it holds your values), then edit it:
+
+```bash
+cp ansible/inventory/group_vars/all.yml.example ansible/inventory/group_vars/all.yml
+```
 
 | Variable | Set to | Notes |
 |---|---|---|
@@ -77,7 +81,7 @@ Note the outputs (the droplet's public IP especially). Then **create/point the D
 | `analytics_domain` | e.g. `analytics.brett-buskirk.dev` | must match Terraform and `BASE_URL` |
 | `caddy_acme_email` | your email | ACME contact for the public TLS certificate |
 
-`public_ip` defaults to the inventory host address, and `tailscale_ip` is captured automatically once the
+`public_ip` defaults to the inventory host address, and the dashboard's tailnet URL is set up automatically once the
 node joins the tailnet — you don't set either by hand.
 
 **b. Fill in the Plausible secrets.** Copy the env template and generate the secrets:

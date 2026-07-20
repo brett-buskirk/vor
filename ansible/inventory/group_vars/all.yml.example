@@ -2,6 +2,11 @@
 # =============================================================================
 # Ansible Group Variables — All Hosts (vor)
 # =============================================================================
+# Copy this file to all.yml (same directory) and fill in your values:
+#   cp all.yml.example all.yml
+# The real all.yml is gitignored — it holds your per-deployment values, so
+# updates to this template never conflict with your settings on `git pull`.
+#
 # REQUIRED before running the playbook:
 #   project_name      — must match terraform.tfvars
 #   analytics_domain  — public hostname (Plausible BASE_URL + public TLS host)
