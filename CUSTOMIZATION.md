@@ -64,6 +64,10 @@ terraform apply
 Note the outputs (the droplet's public IP especially). Then **create/point the DNS record**:
 `analytics.brett-buskirk.dev` → the droplet's public IP. TLS won't issue until DNS resolves.
 
+> By default Terraform keeps state in a local `terraform.tfstate`. That's fine for a solo deployment — but
+> see [Optional — remote Terraform state](#optional--remote-terraform-state-digitalocean-spaces) below to
+> store it durably in DigitalOcean Spaces instead.
+
 ---
 
 ## Step 3 — Configure the analytics stack
@@ -190,6 +194,47 @@ docker compose logs -f plausible
 
 Back up the databases — see **[docs/BACKUP.md](docs/BACKUP.md)** for the strategy (volume snapshots plus
 `scripts/backup.sh` logical dumps) and the restore procedure.
+
+---
+
+## Optional — remote Terraform state (DigitalOcean Spaces)
+
+By default Terraform keeps state in a local `terraform.tfstate` — the single record that maps your config
+to the real cloud resources. For a solo deployment that's fine (lose it and you recover by hand with
+`terraform import`), but storing state in a **DigitalOcean Spaces** bucket makes it durable, versioned,
+encrypted, and lockable.
+
+> **Cost note.** Spaces has a ~$5/mo floor, which is poor value for a few-KB state file *alone*. But if
+> you're already standing up a Spaces bucket for backups (see [docs/BACKUP.md](docs/BACKUP.md)), reuse the
+> same bucket for state and the incremental cost is zero. A free alternative is HashiCorp's Terraform Cloud.
+
+1. **Create the bucket by hand.** In the DigitalOcean console, create a Spaces bucket (e.g.
+   `<project_name>-terraform-state`), set it **Private**, and enable **versioning**. Create it manually —
+   *not* with this Terraform — otherwise the state describing the bucket would live inside the bucket it
+   describes (a bootstrap loop).
+
+2. **Generate Spaces access keys** (API → Spaces Keys — separate from your `do_token`) and export them;
+   never commit them:
+
+   ```bash
+   export AWS_ACCESS_KEY_ID=<spaces-key>
+   export AWS_SECRET_ACCESS_KEY=<spaces-secret>
+   ```
+
+3. **Uncomment and fill the `backend "s3"` block** in `terraform/environments/example/main.tf` (the
+   scaffold is already there). `use_lockfile = true` gives native state locking — no DynamoDB table
+   needed (Terraform ≥ 1.10).
+
+4. **Migrate the existing local state** into the bucket:
+
+   ```bash
+   terraform -chdir=terraform/environments/example init -migrate-state
+   ```
+
+   Terraform copies the local state up and switches to the remote backend. Once you've confirmed a
+   `terraform plan` reads clean, delete the local `terraform.tfstate*` files.
+
+Subsequent `plan`/`apply` runs then read and lock state in Spaces.
 
 ---
 

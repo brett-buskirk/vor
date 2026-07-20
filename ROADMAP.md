@@ -44,7 +44,8 @@ focused PRs and maps to a milestone. Check items off as they ship._
       issue #4, and link the two repos.
 
 ## Post-1.0 ideas
-- [ ] Automated, scheduled backups with retention.
-- [ ] Remote Terraform state (Spaces/S3 backend).
+- [ ] Automated, scheduled backups with retention (to a DO Spaces bucket).
+- [ ] Remote Terraform state (DO Spaces `s3` backend) — can share the backups bucket; setup documented
+      in [CUSTOMIZATION.md](CUSTOMIZATION.md).
 - [ ] Optional second cloud provider / staging environment.
 - [ ] Uptime/health alerting for the analytics host itself.
