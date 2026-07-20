@@ -34,8 +34,10 @@ override.tf
 override.tf.json
 
 # --- Ansible ---
-# Real inventory is generated/secret; only the *.example is tracked.
+# Real inventory + group vars hold per-deployment values; only the *.example
+# variants are tracked. Copy each to its real name and fill it in.
 ansible/inventory/manual.yml
+ansible/inventory/group_vars/all.yml
 ansible/inventory/*.retry
 *.retry
 # Vendored Galaxy roles (installed via `ansible-galaxy install -r
