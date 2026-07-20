@@ -32,17 +32,22 @@ terraform {
     }
   }
 
-  # Remote state backend (recommended for team/production use).
-  # Uncomment and fill in your values before running terraform apply.
-  # TODO(vor): document the DO Spaces remote-state setup in CUSTOMIZATION.md.
+  # Remote state backend (optional): durable, versioned, locked state in a
+  # DigitalOcean Spaces bucket instead of a local file. Full setup — create the
+  # bucket, generate Spaces keys, migrate existing state — is in CUSTOMIZATION.md
+  # ("Optional — remote Terraform state"). Uncomment and fill in to enable.
   # backend "s3" {
-  #   endpoint                    = "<region>.digitaloceanspaces.com"
-  #   key                         = "terraform/<project_name>/terraform.tfstate"
-  #   bucket                      = "<project_name>-terraform-state"
-  #   region                      = "us-east-1"  # Required by provider; ignored by DO Spaces
+  #   bucket = "<project_name>-terraform-state"
+  #   key    = "terraform/<project_name>/terraform.tfstate"
+  #   region = "us-east-1" # required by the provider; ignored by DO Spaces
+  #   endpoints = {
+  #     s3 = "https://<region>.digitaloceanspaces.com"
+  #   }
   #   skip_credentials_validation = true
+  #   skip_requesting_account_id  = true
   #   skip_metadata_api_check     = true
   #   skip_region_validation      = true
+  #   use_lockfile                = true # native state locking (Terraform >= 1.10; no DynamoDB needed)
   # }
 }
 
