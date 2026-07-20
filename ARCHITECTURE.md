@@ -68,16 +68,24 @@ component; the recommended floor is `s-2vcpu-4gb`. **Every stateful path** — t
 data directories, Plausible's own state, and Caddy's ACME certificates — is bind-mounted under a single
 `DATA_ROOT` (`/mnt/<project_name>-analytics-data`) pointed at an attached **Block Storage volume**. So the
 droplet can be rebuilt or resized and the volume reattached with zero data loss (and no ACME re-issuance).
-Vör deliberately uses no Docker named volumes, which would live on the droplet's ephemeral disk.
+The databases and Caddy's certs live on that volume; the one exception is Plausible's own app state
+(`/var/lib/plausible`), a Docker named volume — the container runs non-root and can't write a root-owned
+bind mount, and that state is regenerable, not analytics data.
 
 ### Caddy (reverse proxy + TLS)
 
-The perimeter. Caddy terminates TLS (automatic ACME certificates for `analytics_domain`) and enforces the
-public/private split described above. It is the only container that publishes host ports — and it does so
-on **two different interfaces**: `80`/`443` on the droplet's public IP (ingestion + ACME), and `443` on
-the droplet's Tailscale IP mapped to Caddy's internal `:8443` dashboard listener. That per-interface
-binding is what keeps the dashboard off the public internet at the OS layer, on top of the path rules in
-the Caddyfile. Its config is the security-critical file in the repo — see `docker/plausible/Caddyfile.example`.
+The perimeter, and the only container that publishes host ports. It enforces the public/private split on
+two fronts:
+
+- **Public** — `80`/`443` on the droplet's public IP. Caddy gets an automatic Let's Encrypt cert for
+  `analytics_domain` and serves **only** `/js/*` + `/api/event`; everything else 404s.
+- **Dashboard** — plain HTTP on `127.0.0.1:8443` (loopback only, unreachable off-host). **Tailscale Serve**
+  fronts it, terminating real HTTPS on the droplet's MagicDNS name and forwarding over loopback, so the
+  dashboard is reachable only over the tailnet. Caddy rewrites the upstream `Host`/`Origin`/`X-Forwarded-Proto`
+  so Plausible (whose `BASE_URL` is the public https domain) accepts the tailnet request — without which
+  login's CSRF, the session cookie, and LiveView can't all pass. See `docs/DASHBOARD-ACCESS.md`.
+
+The Caddyfile is the security-critical file in the repo — see `docker/plausible/Caddyfile.example`.
 
 ### Plausible CE
 

@@ -158,11 +158,12 @@ services:
       # world can reach /js/* and /api/event. TODO(vor): set PUBLIC_IP.
       - "${PUBLIC_IP:-203.0.113.10}:80:80"
       - "${PUBLIC_IP:-203.0.113.10}:443:443"
-      # ADMIN dashboard — bound to the TAILSCALE IP only, never the public IP.
-      # Caddy serves the dashboard on :8443 internally; publishing it solely on
-      # the tailnet address keeps it off the public internet.
-      # TODO(vor): set TAILSCALE_IP (tailscale ip -4 on the droplet).
-      - "${TAILSCALE_IP:-100.100.100.100}:443:8443"
+      # ADMIN dashboard — plain HTTP on :8443, published on LOOPBACK ONLY. It is
+      # NOT reachable off-host; `tailscale serve` (see docs/DASHBOARD-ACCESS.md)
+      # terminates real HTTPS on the droplet's MagicDNS name and forwards here.
+      # That keeps the dashboard tailnet-only while giving it a trusted cert and
+      # a BASE_URL-matching origin (so Plausible login/LiveView work).
+      - "127.0.0.1:8443:8443"
     networks:
       - vor
 
