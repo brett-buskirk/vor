@@ -11,9 +11,9 @@ no consent banner, and no third party in the loop.
 
 > Not an engineer? Read the [plain-language overview](docs/ABOUT.md) — what Vör is and why it exists, no jargon.
 
-> **Status:** pre-1.0. The Terraform, Ansible, and Docker/Caddy layers are implemented and CI-green — a
-> `terraform apply` + `ansible-playbook` run stands up the full stack. The live v1.0 deploy and the
-> repo's public release are the remaining milestones (see [ROADMAP.md](ROADMAP.md)).
+> **Status:** deployed. A live instance runs in production on DigitalOcean and tracks the sites listed
+> under [Live instance](#live-instance) below, stood up with a single `terraform apply` + `ansible-playbook`
+> run. Tagging `v1.0.0` is the last milestone (see [ROADMAP.md](ROADMAP.md)).
 
 ---
 
@@ -141,6 +141,16 @@ Only two paths are public: the tracking script (`/js/*`) and the event API (`/ap
 The **admin dashboard is Tailscale-only** — authenticated, encrypted, and never exposed on the public IP.
 SSH is restricted to the IPs in `ssh_allowed_ips` (required, no default). PostgreSQL and ClickHouse are
 never published off the internal Docker network. See [SECURITY.md](SECURITY.md).
+
+---
+
+## Live instance
+
+This repo runs Brett Buskirk's own privacy-first analytics. The instance currently tracks:
+
+- **[brett-buskirk.dev](https://brett-buskirk.dev)** — the contracting site + blog
+
+Adding another site needs no infrastructure change — see [docs/ADDING-A-SITE.md](docs/ADDING-A-SITE.md).
 
 ---
 
