@@ -72,7 +72,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install ansible-lint
-          ansible-galaxy collection install -r ansible/requirements.yml
+          # Installs the roles (brett-buskirk.baseline + its secure_user
+          # dependency) and the collections from ansible/requirements.yml. The
+          # roles vendor into ansible/roles/ (gitignored; excluded from lint via
+          # .ansible-lint) and are resolved for site.yml.
+          ansible-galaxy install -r ansible/requirements.yml
 
       - name: ansible-lint
         run: ansible-lint ansible/

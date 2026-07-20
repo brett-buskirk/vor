@@ -1,13 +1,25 @@
 ---
 # =============================================================================
-# Ansible Galaxy collection dependencies for the vor playbook
+# Ansible Galaxy dependencies for the vor playbook
 # =============================================================================
-# Install with:
-#   ansible-galaxy collection install -r ansible/requirements.yml
+# Install BOTH roles and collections before running the playbook:
+#   ansible-galaxy install -r ansible/requirements.yml
 #
+# Roles (host baseline — provisions + hardens the droplet):
+#   brett-buskirk.baseline — SSH hardening, UFW, fail2ban, Docker + Compose,
+#     Tailscale. Pulls brett-buskirk.secure_user (a sudo user + key-only SSH)
+#     as a dependency. Published on Ansible Galaxy.
+#
+# Collections:
 #   community.general — ufw, filesystem, timezone
 #   ansible.posix     — mount (attach the Block Storage volume at data_root)
 # =============================================================================
+roles:
+  - name: brett-buskirk.baseline
+    version: v1.0.0
+  - name: brett-buskirk.secure_user # baseline's dependency — pinned explicitly
+    version: v1.1.0
+
 collections:
   - name: community.general
   - name: ansible.posix

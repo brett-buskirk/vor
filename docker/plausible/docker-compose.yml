@@ -31,6 +31,14 @@
 #   docker compose up -d
 # =============================================================================
 
+# Per-service log rotation (capped json-file) so container logs can't fill the
+# droplet's root disk. Applied to every service via the *default-logging anchor.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # ---------------------------------------------------------------------------
   # PostgreSQL — accounts, site configuration, metadata
@@ -39,6 +47,7 @@ services:
     image: postgres:16-alpine
     container_name: vor_plausible_db
     restart: always
+    logging: *default-logging
     volumes:
       # On the attached Block Storage volume (DATA_ROOT) so accounts + site
       # config survive a droplet rebuild. See "Data durability" at the bottom.
@@ -63,6 +72,7 @@ services:
     image: clickhouse/clickhouse-server:24.12-alpine
     container_name: vor_plausible_events_db
     restart: always
+    logging: *default-logging
     volumes:
       # The events table (the product) on the Block Storage volume (DATA_ROOT).
       - ${DATA_ROOT:-/mnt/vor-analytics-data}/clickhouse:/var/lib/clickhouse
@@ -94,6 +104,7 @@ services:
     image: ghcr.io/plausible/community-edition:v3.2.1
     container_name: vor_plausible
     restart: always
+    logging: *default-logging
     command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
     depends_on:
       plausible_db:
@@ -123,6 +134,7 @@ services:
     image: caddy:2-alpine
     container_name: vor_caddy
     restart: always
+    logging: *default-logging
     depends_on:
       - plausible
     volumes:

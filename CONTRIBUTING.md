@@ -26,6 +26,7 @@ Run these locally before opening a PR — CI (`.github/workflows/ci.yml`) runs t
 terraform fmt -recursive terraform/
 terraform -chdir=terraform/environments/example validate
 tflint --chdir=terraform/environments/example
+ansible-galaxy install -r ansible/requirements.yml   # roles + collections (needed for ansible-lint)
 ansible-lint ansible/
 yamllint .
 shellcheck scripts/*.sh

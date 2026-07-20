@@ -9,7 +9,8 @@
 # SECRETS DO NOT LIVE HERE. Plausible's SECRET_KEY_BASE, TOTP_VAULT_KEY, the
 # database passwords, SMTP creds, and the Tailscale auth key are read from a
 # gitignored env file / Ansible Vault / -e extra vars — see plausible_env_file
-# and roles/tailscale. Never commit real secrets to this file.
+# below and the `-e tailscale_auth_key=...` passed at runtime. Never commit
+# real secrets to this file.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -37,6 +38,14 @@ deploy_environment: production
 timezone: America/New_York
 
 # -----------------------------------------------------------------------------
+# Host baseline (brett-buskirk.baseline + secure_user)
+# -----------------------------------------------------------------------------
+# The non-root sudo user secure_user creates (baseline adds it to the docker
+# group). The deploy keeps connecting as root for now; this user is for later
+# hardening. Its SSH key is copied from root's authorized_keys on the droplet.
+user_name: "deploy"
+
+# -----------------------------------------------------------------------------
 # Image versions
 # -----------------------------------------------------------------------------
 # TODO(vor): pin/verify against https://github.com/plausible/community-edition
@@ -60,19 +69,16 @@ caddy_acme_email: "admin@example.com"
 public_ip: "{{ ansible_host }}"
 
 # The droplet's TAILSCALE IP that Caddy's dashboard listener binds to. Fallback
-# only — the tailscale role captures the real address (tailscale ip -4) and
+# only — the plausible role captures the real address (tailscale ip -4) and
 # overrides this via set_fact once the node has joined the tailnet.
 tailscale_ip: "100.100.100.100"
 
-# Interface UFW opens for the admin dashboard (see the security role).
-tailscale_interface: "tailscale0"
-
 # -----------------------------------------------------------------------------
-# Tailscale — admin dashboard surface
+# Tailscale — admin dashboard surface (consumed by brett-buskirk.baseline)
 # -----------------------------------------------------------------------------
 # The auth key is a SECRET — do NOT store it here. Pass it at runtime:
 #   ansible-playbook ... -e "tailscale_auth_key=tskey-auth-xxxx"
-# or pull it from Ansible Vault. See roles/tailscale.
+# or pull it from Ansible Vault.
 tailscale_up_args: "--ssh"
 
 # -----------------------------------------------------------------------------

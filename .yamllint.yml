@@ -1,6 +1,12 @@
 ---
 extends: default
 
+# Vendored Galaxy roles (installed by `ansible-galaxy install`) are not vor's
+# code and follow their own style — don't lint them. Also gitignored.
+ignore: |
+  ansible/roles/brett-buskirk.baseline/
+  ansible/roles/brett-buskirk.secure_user/
+
 rules:
   # Long lines exist in comments and Jinja2 templates — warn, don't error.
   line-length:

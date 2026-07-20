@@ -68,9 +68,12 @@ runtime proof in §6.
 Postgres and ClickHouse declare no `ports:` — they are reachable only on the internal `vor` Docker network
 by service name. They never bind to the public or Tailscale interface. **Assessment: sound.**
 
-### 4.4 Host hardening (Ansible `security` role)
-Root password login disabled, password auth disabled (key-only), `fail2ban` on SSH, `unattended-upgrades`
-for security patches, and UFW as defense-in-depth mirroring the port model. **Assessment: solid baseline.**
+### 4.4 Host hardening (`brett-buskirk.baseline` + `secure_user`, + vor's `common`)
+The host baseline is the published `brett-buskirk.baseline` role and its `secure_user` dependency: a
+passwordless-sudo user with key-only SSH, SSH password auth disabled, `fail2ban` on SSH, Docker + Compose
+and Tailscale from their official apt repos, and UFW (default-deny inbound; `80`/`443` + SSH) as
+defense-in-depth. vor's `common` role adds `unattended-upgrades`. vor keeps root SSH (key-only) for now;
+dropping it is the R5 follow-up. **Assessment: solid baseline — reused, not reinvented.**
 
 ### 4.5 Secrets handling
 Only `*.example` files are tracked; real `*.tfvars`, `plausible-conf.env`, keys, and the rendered Caddyfile
@@ -82,7 +85,7 @@ Env files are mode `0600`. **Assessment: sound;** see R3 below for a least-privi
 | # | Risk | Severity | Disposition |
 |---|---|---|---|
 | **R1** | The public `/api/event` endpoint has no rate limiting — open to event spam / volumetric abuse. | Medium | **Mitigation planned.** Add Caddy `rate_limit` on the public site, and/or front with a CDN. Plausible does some server-side handling, but this is the most exposed surface. |
-| **R2** | The tailnet is a flat trust zone — UFW allows *all* traffic on `tailscale0`, so **any** device on the tailnet can reach the dashboard. | Medium | **Recommendation:** apply **Tailscale ACLs** (tag the droplet, restrict which users/devices may reach it). The security model assumes a well-governed tailnet; ACLs make that explicit. |
+| **R2** | The tailnet is a flat trust zone — the dashboard is published on the tailnet interface, so **any** device on the tailnet can reach it. | Medium | **Recommendation:** apply **Tailscale ACLs** (tag the droplet, restrict which users/devices may reach it). The security model assumes a well-governed tailnet; ACLs make that explicit. |
 | **R3** | The shared `plausible-conf.env` is injected into the Postgres container too, so Postgres sees app-only secrets (`SECRET_KEY_BASE`, SMTP creds). | Low | **Accepted** for a single-tenant, root-controlled host. A dedicated Postgres env file would tighten least-privilege if ever multi-tenant. |
 | **R4** | Single Docker network — a compromised Plausible (or Caddy) container can reach Postgres/ClickHouse directly. | Medium | **Accepted** for single-node Compose. Future hardening: split networks so only Plausible shares the DB network (Caddy needs only Plausible). |
 | **R5** | Two standing admin paths: SSH on `:22` *and* Tailscale SSH (`--ssh`). | Low | **Recommendation:** after provisioning, consider dropping public `:22` from the firewall and administering solely over Tailscale SSH, shrinking the public surface to `80`/`443` only. |
