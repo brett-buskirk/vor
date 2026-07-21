@@ -2,10 +2,11 @@
 
 **Scope:** the network perimeter of a Vör deployment — the DigitalOcean Cloud Firewall, the Caddy
 public/private split, data-store isolation, host hardening, and secrets handling.
-**Method:** design + code review of the Terraform firewall module, the Ansible `security`/`tailscale`
-roles, and the Caddy + Compose configuration, against the stated goal: *only* the two ingestion paths are
-public; everything else is private.
-**Date:** 2026-07-18. **Reviewer:** build agent, for Brett Buskirk (human sign-off pending the live deploy).
+**Method:** design + code review of the Terraform firewall module, the Ansible `brett-buskirk.baseline`
+(+ `secure_user`) and `common` roles, and the Caddy + Compose configuration, against the stated goal:
+*only* the two ingestion paths are public; everything else is private.
+**Date:** 2026-07-18 (design); verified against the live deploy 2026-07-20. **Reviewer:** build agent, for
+Brett Buskirk.
 
 This is a design review of the code as shipped. The runtime proofs in [§6](#6-verification) are executed
 against the live instance at go-live (Phase 6) and are a definition-of-done gate.
@@ -74,7 +75,8 @@ The host baseline is the published `brett-buskirk.baseline` role and its `secure
 passwordless-sudo user with key-only SSH, SSH password auth disabled, `fail2ban` on SSH, Docker + Compose
 and Tailscale from their official apt repos, and UFW (default-deny inbound; `80`/`443` + SSH) as
 defense-in-depth. vor's `common` role adds `unattended-upgrades`. vor keeps root SSH (key-only) for now;
-dropping it is the R5 follow-up. **Assessment: solid baseline — reused, not reinvented.**
+narrowing the public SSH surface further is the R5 follow-up. **Assessment: solid baseline — reused, not
+reinvented.**
 
 ### 4.5 Secrets handling
 Only `*.example` files are tracked; real `*.tfvars`, `plausible-conf.env`, keys, and the rendered Caddyfile
@@ -86,7 +88,7 @@ Env files are mode `0600`. **Assessment: sound;** see R3 below for a least-privi
 | # | Risk | Severity | Disposition |
 |---|---|---|---|
 | **R1** | The public `/api/event` endpoint has no rate limiting — open to event spam / volumetric abuse. | Medium | **Mitigation planned.** Add Caddy `rate_limit` on the public site, and/or front with a CDN. Plausible does some server-side handling, but this is the most exposed surface. |
-| **R2** | The tailnet is a flat trust zone — the dashboard is published on the tailnet interface, so **any** device on the tailnet can reach it. | Medium | **Recommendation:** apply **Tailscale ACLs** (tag the droplet, restrict which users/devices may reach it). The security model assumes a well-governed tailnet; ACLs make that explicit. |
+| **R2** | The tailnet is a flat trust zone — the dashboard is exposed over the tailnet via Tailscale Serve, so **any** device on the tailnet can reach it. | Medium | **Recommendation:** apply **Tailscale ACLs** (tag the droplet, restrict which users/devices may reach it). The security model assumes a well-governed tailnet; ACLs make that explicit. |
 | **R3** | The shared `plausible-conf.env` is injected into the Postgres container too, so Postgres sees app-only secrets (`SECRET_KEY_BASE`, SMTP creds). | Low | **Accepted** for a single-tenant, root-controlled host. A dedicated Postgres env file would tighten least-privilege if ever multi-tenant. |
 | **R4** | Single Docker network — a compromised Plausible (or Caddy) container can reach Postgres/ClickHouse directly. | Medium | **Accepted** for single-node Compose. Future hardening: split networks so only Plausible shares the DB network (Caddy needs only Plausible). |
 | **R5** | Two standing admin paths: SSH on `:22` *and* Tailscale SSH (`--ssh`). | Low | **Recommendation:** after provisioning, consider dropping public `:22` from the firewall and administering solely over Tailscale SSH, shrinking the public surface to `80`/`443` only. |

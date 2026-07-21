@@ -27,8 +27,10 @@ Vör is an Infrastructure-as-Code template for a self-hosted analytics host. Key
 - **No secrets committed.** Only `*.example` files are tracked. Real credentials — `*.tfvars`, `.env`,
   `plausible-conf.env`, `*.pem`, `*.key`, Tailscale auth keys, generated inventory — are gitignored.
 - **Minimal public surface.** Only the tracking script (`/js/*`) and event API (`/api/event`) are exposed
-  to the public internet, over TLS. The admin dashboard, login, and settings are bound to the **Tailscale**
-  interface and are not reachable from the droplet's public IP.
+  to the public internet, over TLS. The admin dashboard, login, and settings are served only over the
+  **Tailscale** tailnet — Caddy binds the dashboard to loopback (`127.0.0.1:8443`) and `tailscale serve`
+  fronts it with a real HTTPS cert; it is never reachable from the droplet's public IP (see
+  [docs/DASHBOARD-ACCESS.md](docs/DASHBOARD-ACCESS.md)).
 - **Data stores are never public.** PostgreSQL and ClickHouse bind only to the internal Docker network.
 - **Cloud Firewall defaults to deny.** Inbound is limited to `80`/`443` (public ingestion + ACME) and `22`
   from explicitly specified IPs (`ssh_allowed_ips`, required — no `0.0.0.0/0` default). Tailscale needs no

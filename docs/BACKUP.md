@@ -78,6 +78,12 @@ single table, or reading the data outside ClickHouse.
 
 ### Restore from logical dumps
 
+Run these on the droplet from the stack directory (so `docker compose` finds the compose file):
+
+```bash
+cd /opt/<project_name>
+```
+
 **PostgreSQL:**
 
 ```bash
@@ -98,8 +104,10 @@ gunzip -c clickhouse-events_v2.native.gz \
       --query "INSERT INTO plausible_events_db.events_v2 FORMAT Native"
 ```
 
-Restore into a **freshly migrated, empty** instance (let Plausible create the databases/schema first via
-its normal startup), then load Postgres before ClickHouse so site config exists for the events.
+Restore into a **freshly created but not-yet-populated** instance: let Plausible run its normal startup
+migrations first so the databases and schema exist, then load Postgres before ClickHouse so site config
+exists for the events. Because the `pg_dump` above includes `CREATE` statements, restoring over the
+migrated schema logs "already exists" notices — expected; the data still loads.
 
 ---
 

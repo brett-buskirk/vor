@@ -33,8 +33,8 @@ shellcheck scripts/*.sh
 docker compose -f docker/plausible/docker-compose.yml config -q
 ```
 
-Some jobs are legitimately yellow on the bare scaffold and go green as the IaC is implemented.
-**`agentgate` is the required check.**
+CI runs these plus `tfsec` (advisory) and `caddy validate` (the reverse-proxy config). CI is green on
+`main`; keep it that way. **`agentgate` is the required check.**
 
 ## How to...
 

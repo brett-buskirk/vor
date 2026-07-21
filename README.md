@@ -11,9 +11,9 @@ no consent banner, and no third party in the loop.
 
 > Not an engineer? Read the [plain-language overview](docs/ABOUT.md) — what Vör is and why it exists, no jargon.
 
-> **Status:** deployed. A live instance runs in production on DigitalOcean and tracks the sites listed
+> **Status:** live (`v1.0.0`). A production instance runs on DigitalOcean and tracks the sites listed
 > under [Live instance](#live-instance) below, stood up with a single `terraform apply` + `ansible-playbook`
-> run. Tagging `v1.0.0` is the last milestone (see [ROADMAP.md](ROADMAP.md)).
+> run (see [CUSTOMIZATION.md](CUSTOMIZATION.md)).
 
 ---
 
@@ -53,8 +53,8 @@ own droplet**, as code, so the data never leaves your control.
 **Access model — the deliberate split:** analytics ingestion is inherently public (visitors everywhere
 load the script and post events), but the admin dashboard is not. Caddy serves **only** the tracking
 script (`/js/*`) and event API (`/api/event`) to the public internet over TLS; the **dashboard, login,
-and settings are bound to the Tailscale interface** and never reachable from the public IP. Postgres and
-ClickHouse stay on the internal Docker network.
+and settings are reachable only over Tailscale** (via `tailscale serve`) and never from the public IP.
+Postgres and ClickHouse stay on the internal Docker network.
 
 ---
 
