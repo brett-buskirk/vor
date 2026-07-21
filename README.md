@@ -60,28 +60,9 @@ Postgres and ClickHouse stay on the internal Docker network.
 
 ## Architecture
 
-```
-   Visitors (any tracked site)                     You (admin)
-            │                                           │
-   GET /js/script.js                              Tailscale (zero-trust)
-   POST /api/event                                       │
-            │  public :443 (TLS)                         │  tailnet only
-            ▼                                            ▼
-   ┌───────────────────────────── DigitalOcean droplet ─────────────────────────────┐
-   │  ┌─────────┐   public: /js/*, /api/event    ┌──────────────────────────────┐   │
-   │  │  Caddy  │ ─────────────────────────────► │  Plausible CE  :8000          │   │
-   │  │ :80/443 │   tailnet: dashboard, /login   │  (dashboard + ingestion)      │   │
-   │  └─────────┘ ◄───────────────────────────── └──────────────┬───────────────┘   │
-   │                                                             │  internal network │
-   │                              ┌──────────────┐   ┌───────────▼──────────────┐    │
-   │                              │ PostgreSQL   │   │ ClickHouse               │    │
-   │                              │ (metadata)   │   │ (events)                 │    │
-   │                              └──────┬───────┘   └───────────┬──────────────┘    │
-   │                                     └─────── Block Storage volume ──────┘       │
-   └────────────────────────────────────────────────────────────────────────────────┘
-```
+![Vör architecture: visitors on any tracked site reach only the tracking script (/js/*) and event API (/api/event) through Caddy over public TLS on the DigitalOcean droplet, while the admin (you) reaches the dashboard only over Tailscale. Caddy reverse-proxies to Plausible CE, which writes site metadata to PostgreSQL and events to ClickHouse on the internal network, with both databases backed by a Block Storage volume.](docs/images/vor-architecture-diagram.png)
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full component map, trust-zone model, and design decisions.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full component map, the precise trust-zone model (the dashboard is fronted by `tailscale serve`), and the design decisions.
 
 ---
 
