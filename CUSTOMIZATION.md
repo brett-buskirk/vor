@@ -92,7 +92,7 @@ node joins the tailnet — you don't set either by hand.
 
 ```bash
 cp docker/plausible/plausible-conf.env.example docker/plausible/plausible-conf.env
-openssl rand -base64 48   # -> SECRET_KEY_BASE
+openssl rand -base64 64   # -> SECRET_KEY_BASE (Plausible requires >= 64 bytes)
 openssl rand -base64 32   # -> TOTP_VAULT_KEY
 ```
 
@@ -246,7 +246,7 @@ ssh root@<droplet-ip> "cd /opt/<project_name> && docker compose down && tailscal
 
 # 2a. Destroy compute + firewall, KEEP the data volume
 cd terraform/environments/example
-terraform destroy -target=module.droplet -target=module.firewall
+terraform destroy -target=module.analytics_droplet -target=module.analytics_firewall
 
 # 2b. Full teardown INCLUDING the data volume (this deletes your analytics history)
 terraform destroy

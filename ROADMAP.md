@@ -1,7 +1,8 @@
 # Roadmap
 
-_What's planned for Vör — a phased build from scaffold to a live, public v1.0. Each phase is one or more
-focused PRs and maps to a milestone. Check items off as they ship._
+_Vör's phased build, from scaffold to a live v1.0. Each phase was one or more focused PRs mapping to a
+milestone. Phases 0–6 shipped; the instance is deployed and tracking traffic. Below the line are post-1.0
+ideas._
 
 ## Phase 0 — Scaffold ✅ (this repo)
 - [x] Born-compliant repo (huginn): license, ruleset, labels, `.agentgate.yml`, CI.
@@ -16,17 +17,18 @@ focused PRs and maps to a milestone. Check items off as they ship._
 - [x] `terraform validate` + `fmt` + `tflint` clean.
 
 ## Phase 2 — Ansible ✅
-- [x] Implement `common`, `security`, `docker`, `tailscale`, `plausible` roles and `site.yml`.
+- [x] Implement the `common` + `plausible` roles and `site.yml`, building on the published
+      `brett-buskirk.baseline` role (+ its `secure_user` dependency) for host hardening.
 - [x] Idempotent (second run is a no-op); `ansible-lint` clean.
 
 ## Phase 3 — Plausible stack + the public/private split ✅
-- [x] Real `docker-compose.yml` (pinned images; all state on the volume).
-- [x] The Caddy config that publicly serves **only** `/js/*` + `/api/event` and binds the dashboard to
-      Tailscale. Validated with `caddy validate`.
-- [ ] Prove the dashboard is unreachable from the public IP — a runtime check that lands with the live
-      deploy (Phase 6).
+- [x] Real `docker-compose.yml` (pinned images; data on the block-storage volume).
+- [x] The Caddy config that publicly serves **only** `/js/*` + `/api/event` while the dashboard rides
+      Tailscale (`tailscale serve` + real HTTPS). Validated with `caddy validate`.
+- [x] Prove the dashboard is unreachable from the public IP — verified at the live deploy (public IP 404s
+      the dashboard; it answers only over the tailnet).
 
-## Phase 4 — Docs & worked example
+## Phase 4 — Docs & worked example ✅
 - [x] Finish `CUSTOMIZATION.md` with `brett-buskirk.dev` as the worked example.
 - [x] Final `ARCHITECTURE.md` component + trust-zone map; document every variable.
 
@@ -37,11 +39,12 @@ focused PRs and maps to a milestone. Check items off as they ship._
       Automated scheduling to Spaces is post-1.0.
 - [x] Security review of the firewall + Caddy split — [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
-## Phase 6 — v1.0 & go-live
-- [ ] Deploy the real instance; point `analytics.brett-buskirk.dev` at it.
-- [ ] Tag `v1.0.0`; write release notes; **flip the repo public**.
-- [ ] *Closing the loop*: add the `<script>` tag to `brett-buskirk-dev` (`Layout.astro`), close its
-      issue #4, and link the two repos.
+## Phase 6 — v1.0 & go-live ✅
+- [x] Deploy the real instance; point `analytics.brett-buskirk.dev` at it.
+- [x] Tag `v1.0.0` and write release notes.
+- [x] *Closing the loop*: `<script>` tag added to `brett-buskirk-dev` (`Layout.astro`), its issue #4
+      closed, and the tracked site listed in the README.
+- [ ] Flip the repo public (enable secret scanning + push protection first).
 
 ## Post-1.0 ideas
 - [ ] Automated, scheduled backups with retention (to a DO Spaces bucket).

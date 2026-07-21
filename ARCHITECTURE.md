@@ -27,13 +27,17 @@ not. Caddy enforces the split across the single Plausible app.
    │  Any visitor, any tracked site │          │  Brett's authenticated device │
    │  GET  /js/script.js            │          │  (dashboard, login, settings) │
    │  POST /api/event               │          └───────────────┬──────────────┘
-   └───────────────┬───────────────┘                          │
-                   │  :443 TLS (ACME)                          │  Tailscale interface
+   └───────────────┬───────────────┘                          │  HTTPS to the droplet's
+                   │  :443 TLS (ACME)                          │  MagicDNS name
                    ▼                                           ▼
-   ┌──────────────────────────────────── droplet ───────────────────────────────────┐
-   │                              ┌───────────────┐                                   │
-   │   public listener  ────────► │     Caddy     │ ◄──────── tailnet listener        │
-   │   (only /js/*, /api/event)   │  :80  :443    │   (everything else → dashboard)   │
+   ┌──────────────────────────────── droplet ────────────────────────────────────────┐
+   │                                             ┌───────────────────────┐            │
+   │                                             │  tailscale serve       │            │
+   │                                             │  real HTTPS on :443    │            │
+   │                                             └───────────┬───────────┘            │
+   │                              ┌───────────────┐          │ 127.0.0.1:8443         │
+   │   public listener  ────────► │     Caddy     │ ◄────────┘ (loopback, plain HTTP) │
+   │   (only /js/*, /api/event)   │  :80  :443    │   (dashboard; Host/Origin rewrite) │
    │                              └───────┬───────┘                                   │
    │                                      │  reverse proxy → plausible:8000           │
    │                              ┌───────▼───────────────┐                           │
@@ -53,9 +57,10 @@ not. Caddy enforces the split across the single Plausible app.
 
 The **hard requirement**: from the droplet's *public* IP, only `/js/*`, `/api/event`, and the ACME
 challenge paths respond; the dashboard returns nothing (connection refused or 404) on the public
-interface and is served only to requests arriving over the Tailscale interface. Proving that property —
-e.g. `curl https://<public-ip>/login` fails while the same over the tailnet succeeds — is part of the
-definition of done.
+interface and is reachable only over the tailnet, where `tailscale serve` fronts Caddy's loopback
+listener with a real HTTPS cert. Proving that property — e.g. `curl https://<public-ip>/login` fails
+while the dashboard's MagicDNS URL succeeds over the tailnet — is part of the definition of done. See
+[docs/DASHBOARD-ACCESS.md](docs/DASHBOARD-ACCESS.md).
 
 ---
 
@@ -64,13 +69,12 @@ definition of done.
 ### Analytics host (droplet)
 
 A single DigitalOcean droplet runs the full stack via Docker Compose. ClickHouse is the memory-hungry
-component; the recommended floor is `s-2vcpu-4gb`. **Every stateful path** — the Postgres and ClickHouse
-data directories, Plausible's own state, and Caddy's ACME certificates — is bind-mounted under a single
-`DATA_ROOT` (`/mnt/<project_name>-analytics-data`) pointed at an attached **Block Storage volume**. So the
-droplet can be rebuilt or resized and the volume reattached with zero data loss (and no ACME re-issuance).
-The databases and Caddy's certs live on that volume; the one exception is Plausible's own app state
-(`/var/lib/plausible`), a Docker named volume — the container runs non-root and can't write a root-owned
-bind mount, and that state is regenerable, not analytics data.
+component; the recommended floor is `s-2vcpu-4gb`. **The durable data** — the Postgres and ClickHouse data
+directories and Caddy's ACME certificates — is bind-mounted under a single `DATA_ROOT`
+(`/mnt/<project_name>-analytics-data`) pointed at an attached **Block Storage volume**. So the droplet can
+be rebuilt or resized and the volume reattached with zero data loss (and no ACME re-issuance). The one
+exception is Plausible's own app state (`/var/lib/plausible`), a Docker named volume — the container runs
+non-root and can't write a root-owned bind mount, and that state is regenerable, not analytics data.
 
 ### Caddy (reverse proxy + TLS)
 
@@ -124,9 +128,9 @@ Caddy :443  ──public listener──►  Plausible :8000  ──►  ClickHou
 
 ```
 Brett's device (on the tailnet)
-   │  dashboard / login / settings
+   │  dashboard / login / settings  (HTTPS to the droplet's MagicDNS name)
    ▼
-Caddy (tailnet listener)  ──►  Plausible :8000  ──►  PostgreSQL (config) + ClickHouse (queries)
+tailscale serve :443  ──►  Caddy 127.0.0.1:8443  ──►  Plausible :8000  ──►  PostgreSQL + ClickHouse
 ```
 
 ---
