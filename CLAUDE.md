@@ -8,7 +8,7 @@ universal rules — this file does **not** restate them:
   merges**; never self-merge, never commit to `main`), signed commits, the safety floors, brand
   positioning, NIST AI RMF alignment.
 - **`~/github-repos/CLAUDE.md`** (estate manual) — issue/PR wiring (assignee `brett-buskirk`, labels,
-  milestone, Estate board **#17**), the `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+  milestone, linked in Linear), the `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
   commit trailer, the AgentGate `dangerous_patterns`-fires-in-prose quirk, the `brett-buskirk`-must-be-
   the-active-`gh`-account gotcha, and the estate memory.
 
@@ -198,8 +198,8 @@ A stranger can `git clone`, read `CUSTOMIZATION.md`, set `project_name` + a shor
 (incl. `analytics_domain` + `ssh_allowed_ips`), run `terraform apply` then `ansible-playbook site.yml`,
 and reach a working Plausible instance: the **tracking script + event API are public over TLS**, the
 **dashboard is reachable only over Tailscale**, analytics data persists on a volume, and **adding a
-second site requires zero infra changes.** The repo has the full docs suite, labels, milestones, the
-Estate board link, issue/PR templates, a green-or-intentionally-yellow CI pipeline, MIT `LICENSE`, and a
+second site requires zero infra changes.** The repo has the full docs suite, labels, milestones, Linear
+tracking, issue/PR templates, a green-or-intentionally-yellow CI pipeline, MIT `LICENSE`, and a
 tagged `v1.0.0`. AgentGate is green on the final PR.
 
 ---
